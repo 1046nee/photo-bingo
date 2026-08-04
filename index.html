@@ -221,12 +221,12 @@ const MEMBERS = ["かんじ","そら","わか","いむた","ゆりな","おん",
 // ①-2 名前ボタンが青色になるメンバー（男子）。ここに無い名前は赤色（女子）になる
 const MALE_MEMBERS = new Set(["かんじ","そら","わか","いむた"]);
 
-// ② 結果発表日時（この日時を過ぎると全員のビンゴと点数が見られる）
-const RESULTS_AT = new Date("2026-08-12T13:00:00+09:00");
+// ② 結果発表日時（この日時を過ぎると全員のビンゴと点数が見られる。UIの発表日時表示もここから出る）
+const RESULTS_AT = new Date("2026-08-12T12:00:00+09:00");
 
-// ③ ゲームマスター用パスワード（幹事だけが知っている番号に変えること）
+// ③ ゲームマスター用パスワード（数字8桁。幹事だけが知っている番号に変えること）
 //    ※ページのソースコードを見ると分かってしまうので、大事なパスワードは使わないこと
-const GM_PASS = "2580";
+const GM_PASS = "25802580";
 
 // ④ Firebaseの設定（セットアップ手順.md 参照。貼り替えるまではこの端末だけのお試しモードで動く）
 const FIREBASE_CONFIG = {
@@ -383,11 +383,10 @@ function compress(file){
 }
 
 /* ---------- 状態 ---------- */
-let me = localStorage.getItem("pbingo_name");
-if(me && !MEMBERS.includes(me)) me=null;
-let authPass = localStorage.getItem("pbingo_pass")||"";   // 自分が入力・設定したパスワード
+let me = null;          // 選択中の名前。端末に保存しない＝開くたびに名前選択→パスワード入力
+let authPass = "";      // このセッションで入力したパスワード（端末に保存しない）
 let pendingName=null;   // パスワード画面で入ろうとしている名前
-let gmOK = false;       // GM_PASS 認証済みか（下で localStorage と照合）
+let gmOK = false;       // GM_PASS 認証済みか（このセッション内のみ。「GMはこちら」を押すたびに再入力）
 let boards={};
 let myPhotos={};        // id -> dataURL（自分のぶんだけキャッシュ）
 const gmPhotos={};      // "名前_マスID" -> {ts, img}（GM・閲覧用キャッシュ。tsはboards側photoTsと照合）
@@ -405,7 +404,6 @@ const revealParam=new URLSearchParams(location.search).get("reveal")==="1";
 const canReveal=()=>now()>=RESULTS_AT || revealParam;
 const fmt=d=>d.toLocaleString("ja-JP",{timeZone:"Asia/Tokyo",month:"numeric",day:"numeric",hour:"2-digit",minute:"2-digit"});
 const esc=s=>String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
-gmOK = localStorage.getItem("pbingo_gm")===GM_PASS;
 async function getPhotoCached(name,id){
   const k=`${name}_${id}`;
   const cur=boards[name]?.photoTs?.[id] ?? null;   // いまの写真の版
@@ -472,19 +470,11 @@ function renderNamePick(){
     <div style="text-align:center;">
       <button class="btn plain" id="gmlink" style="margin-top:14px;">🔑 ゲームマスターはこちら</button>
     </div>`;
+  // 個人画面に入るときは毎回パスワードを入れてもらう（端末に記憶しない）
   app.querySelectorAll(".namebtn").forEach(b=>b.onclick=()=>{
-    const n=b.dataset.n;
-    const p=boards[n]?.pass;
-    if(p && authPass===p){
-      // この端末で前に入力したパスワードが合っていればそのまま入れる
-      me=n; localStorage.setItem("pbingo_name",n);
-      myPhotos={}; view="board";
-      loadMyPhotos().then(render); render();
-    }else{
-      pendingName=n; view="pass"; render();
-    }
+    pendingName=b.dataset.n; view="pass"; render();
   });
-  document.getElementById("gmlink").onclick=()=>{ view="gm"; render(); };
+  document.getElementById("gmlink").onclick=()=>{ gmOK=false; view="gm"; render(); };   // GMも毎回入力
 }
 
 /* ---------- パスワード設定・入力 ---------- */
@@ -496,10 +486,10 @@ function renderPass(){
     <div class="card" style="padding:20px 16px;">
       <p style="text-align:center;font-weight:900;font-size:17px;color:var(--purple);">${n}</p>
       ${existing?`
-        <p style="text-align:center;font-weight:700;font-size:14px;margin-top:8px;">パスワード（数字4桁）を入れてね</p>`:`
-        <p style="text-align:center;font-weight:700;font-size:14px;margin-top:8px;">はじめまして！<br>自分だけのパスワード（数字4桁）を決めてね</p>
+        <p style="text-align:center;font-weight:700;font-size:14px;margin-top:8px;">パスワードを入れてね</p>`:`
+        <p style="text-align:center;font-weight:700;font-size:14px;margin-top:8px;">はじめまして！<br>自分だけのパスワード（数字5桁）を決めてね</p>
         <div class="notice" style="margin-top:10px;">⚠️ このパスワードは<b>ゲームマスターが確認できる</b>よ。ふだん使っているパスワードは使わず、<b>今回かぎりの数字</b>にしてね。</div>`}
-      <input class="passinput" id="pin" type="tel" inputmode="numeric" maxlength="4" placeholder="0000" autocomplete="off">
+      <input class="passinput" id="pin" type="tel" inputmode="numeric" maxlength="5" placeholder="00000" autocomplete="off">
       <div class="notice err hidden" id="perr" style="text-align:center;"></div>
       <div class="mbtns">
         <button class="btn primary" id="go">${existing?"入る":"このパスワードに決める"}</button>
@@ -514,16 +504,18 @@ function renderPass(){
   document.getElementById("backpick").onclick=()=>{ pendingName=null; view="board"; render(); };
   const submit=async()=>{
     const v=pin.value.trim();
-    if(!/^\d{4}$/.test(v)){ showErr("数字4桁で入力してね"); return; }
     const cur=boards[n]?.pass;
     if(cur){
+      // 設定済みの人は保存されているパスワードとの一致だけを見る
+      // （桁数チェックをすると、昔の桁数で設定した人が入れなくなるため）
       if(v!==cur){ showErr("パスワードがちがうよ。もう一度ためしてね"); pin.value=""; pin.focus(); return; }
     }else{
+      if(!/^\d{5}$/.test(v)){ showErr("数字5桁で入力してね"); return; }
       try{ await store.setPass(n,v); }
       catch(e){ showErr("保存に失敗しました: "+e.message); return; }
     }
-    authPass=v; localStorage.setItem("pbingo_pass",v);
-    me=n; localStorage.setItem("pbingo_name",n);
+    authPass=v;
+    me=n;
     pendingName=null; myPhotos={}; view="board";
     loadMyPhotos().then(render); render();
   };
@@ -538,11 +530,11 @@ function rulesHtml(){
     <p style="margin-bottom:10px;">スマホが手放せない、ショート動画を無限に見ちゃう……そんな<b>ドパガキ</b>を卒業するためのビンゴだよ。お題はぜんぶ<b>スクリーンの外の世界</b>にあるもの。画面から顔を上げて、外の世界をじっくり眺めて探してみてね。</p>
     <h3>📖 あそびかた</h3>
     <ol>
-      <li>自分の名前を選んで、<b>数字4桁のパスワード</b>を決める（2回目からはパスワードを入れて入るよ）</li>
+      <li>自分の名前を選んで、<b>数字5桁のパスワード</b>を決める（入るときは毎回パスワードを入れてね）</li>
       <li>ビンゴのマスをタップして、<b>お題に合う写真</b>をアップロード！追加・撮り直し・削除はいつでもOK</li>
-      <li><b>点数</b>：埋めたマス1コ＝1点 ＋ FREE（四隅）＝4点 ＋ そろったライン（たて・よこ・ななめ）1本＝2点で、<b>満点100点</b></li>
-      <li>アップした写真はゲームマスターがチェックするよ。問題なければ<b>〇</b>、お題に合っていなければ<b>×</b>が付くよ。×の間は点数に入らないから、撮り直してね</li>
-      <li>結果発表になったら、「みんなの状況」タブで順位とみんなの写真が見られるよ🎉</li>
+      <li>マスを埋めて、たて・よこ・ななめのラインをそろえて点数アップ！<b>満点100点</b></li>
+      <li>写真はゲームマスターがチェック！<b>×</b>が付いたら撮り直してね</li>
+      <li><b>${fmt(RESULTS_AT)} に結果発表</b>！みんなの順位とビンゴが見られるようになるよ🎉</li>
     </ol>
   </div>`;
 }
@@ -643,7 +635,7 @@ function renderBoard(){
   const bs=app.querySelector(".boardscroll"); if(bs&&sc) bs.scrollLeft=sc;
   if(topicsOpen){ const tp=app.querySelector("details.topics"); if(tp) tp.open=true; }
   document.getElementById("switch").onclick=()=>{
-    me=null; myPhotos={}; localStorage.removeItem("pbingo_name"); view="board"; render();
+    me=null; myPhotos={}; view="board"; render();
   };
   app.querySelectorAll(".bc.editable").forEach(el=>{
     const open=()=>openSquare(el.dataset.id);
@@ -757,7 +749,7 @@ function renderResults(){
   app.innerHTML=`
     ${revealed
       ?`<h2 class="sec">🎉 結果発表！</h2>`
-      :`<div class="countdown">結果発表までおたのしみ！<br>いまは各自の進捗（埋めたマス数）だけ見られます</div>
+      :`<div class="countdown">結果発表は <b>${fmt(RESULTS_AT)}</b>！<br>それまでは各自の進捗（埋めたマス数）だけ見られるよ。おたのしみに！</div>
         <h2 class="sec">みんなの進捗</h2>`}
     <div class="rank">
       ${rows.map((r,i)=>revealed?`
@@ -818,7 +810,7 @@ function renderGMPass(){
     <div class="card" style="padding:20px 16px;">
       <p style="text-align:center;font-weight:900;font-size:17px;color:var(--purple);">🔑 ゲームマスター画面</p>
       <p style="text-align:center;font-size:13px;margin-top:6px;">ゲームマスター用パスワードを入れてね</p>
-      <input class="passinput" id="gmpin" type="tel" inputmode="numeric" maxlength="8" placeholder="****" autocomplete="off">
+      <input class="passinput" id="gmpin" type="tel" inputmode="numeric" maxlength="8" placeholder="00000000" autocomplete="off" style="width:250px;font-size:20px;letter-spacing:5px;">
       <div class="notice err hidden" id="gerr" style="text-align:center;"></div>
       <div class="mbtns">
         <button class="btn primary" id="ggo">入る</button>
@@ -830,7 +822,7 @@ function renderGMPass(){
   document.getElementById("backpick").onclick=()=>{ view="board"; render(); };
   const submit=()=>{
     if(pin.value.trim()===GM_PASS){
-      gmOK=true; localStorage.setItem("pbingo_gm",GM_PASS); render();
+      gmOK=true; render();
     }else{
       const g=document.getElementById("gerr");
       g.textContent="パスワードがちがうよ"; g.classList.remove("hidden");
@@ -875,14 +867,10 @@ function renderGM(){
     </div>
     <div class="mbtns">
       <button class="btn ghost" id="gmback">← 名前選択にもどる</button>
-      <button class="btn plain" id="gmout">ゲームマスターからログアウト</button>
     </div>`;
   app.querySelectorAll(".smallbtn[data-n]").forEach(bt=>bt.onclick=()=>{ view="gmplayer:"+bt.dataset.n; render(); });
   document.getElementById("demoup").onclick=()=>{ view="gmdemo"; render(); };
-  document.getElementById("gmback").onclick=()=>{ view="board"; render(); };
-  document.getElementById("gmout").onclick=()=>{
-    localStorage.removeItem("pbingo_gm"); gmOK=false; view="board"; render();
-  };
+  document.getElementById("gmback").onclick=()=>{ gmOK=false; view="board"; render(); };   // 出たら次回また要パスワード
 }
 
 async function renderGMBoard(name){
@@ -894,6 +882,7 @@ async function renderGMBoard(name){
   const ngc=Object.keys(ng).filter(id=>filled[id]).length;
   const gen=renderGen;
   const sc=app.querySelector(".boardscroll")?.scrollLeft ?? 0;
+  const topicsOpen=app.querySelector("details.topics")?.open ?? false;
   app.innerHTML=`
     <div class="statusbar">
       <span class="who">${dispName(name)}</span>
@@ -905,8 +894,10 @@ async function renderGMBoard(name){
       ${CELLS.map(c=>cellHtml(c,{},filled,false,ng,ok)).join("")}
     </div></div>${legendHtml()}
     <div class="marklegend">⭕＝チェックOK ・ ❌＝要撮り直し ・ 印なし＝チェック待ち</div></div>
+    ${topicsHtml(b)}
     <div class="loading" id="pl">写真を読み込み中…</div>`;
   const bs=app.querySelector(".boardscroll"); if(bs&&sc) bs.scrollLeft=sc;
+  if(topicsOpen){ const tp=app.querySelector("details.topics"); if(tp) tp.open=true; }
   document.getElementById("gback").onclick=()=>{ view="gm"; render(); };
   document.getElementById("greload").onclick=()=>{
     Object.keys(gmPhotos).forEach(k=>{ if(k.startsWith(name+"_")) delete gmPhotos[k]; });
@@ -937,6 +928,7 @@ function renderDemoBoard(){
   const ngCount=Object.keys(ng).filter(id=>filled[id]).length;
   const log=(b.log||[]).slice(-6).reverse();
   const sc=app.querySelector(".boardscroll")?.scrollLeft ?? 0;
+  const topicsOpen=app.querySelector("details.topics")?.open ?? false;
   app.innerHTML=`
     <div class="statusbar">
       <span class="who">🧪 お試し</span>
@@ -954,8 +946,10 @@ function renderDemoBoard(){
       <div class="scorenum"><b>${score}</b>点</div>
       <div class="scoredetail">マス ${filledCount}点 ＋ FREE 4点 ＋ ライン${lines}本×2点</div>
     </div>
-    ${log.length?`<div class="histbox"><div class="histhead">📋 GMチェックのお知らせ（メンバー本人にはこう見えるよ）</div>${log.map(histLine).join("")}</div>`:""}`;
+    ${log.length?`<div class="histbox"><div class="histhead">📋 GMチェックのお知らせ（メンバー本人にはこう見えるよ）</div>${log.map(histLine).join("")}</div>`:""}
+    ${topicsHtml(b)}`;
   const bs=app.querySelector(".boardscroll"); if(bs&&sc) bs.scrollLeft=sc;
+  if(topicsOpen){ const tp=app.querySelector("details.topics"); if(tp) tp.open=true; }
   document.getElementById("gback").onclick=()=>{ view="gm"; render(); };
   app.querySelectorAll(".bc.editable").forEach(el=>{
     const open=()=>openSquare(el.dataset.id, DEMO_NAME, demoPhotos);
