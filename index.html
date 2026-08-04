@@ -171,6 +171,13 @@ h2.sec{font-size:16px;font-weight:900;color:var(--purple);margin-top:18px;
 .okmark{position:absolute;left:2px;top:2px;width:12px;height:12px;border-radius:50%;
   background:#2F9E63;color:#fff;font-size:8px;font-weight:900;
   display:flex;align-items:center;justify-content:center;pointer-events:none;}
+/* 完成したライン上のマスは金色に光る（.lit は okcell より後に定義して枠色を勝たせる） */
+.bc.lit{outline:2.5px solid #F5B93A;outline-offset:-2px;
+  animation:litpulse 1.6s ease-in-out infinite;}
+@keyframes litpulse{
+  0%,100%{box-shadow:0 0 3px 1px rgba(245,185,58,.35);}
+  50%{box-shadow:0 0 10px 3px rgba(245,185,58,.85);}
+}
 .btn.ok{background:#2F9E63;color:#fff;box-shadow:0 3px 0 #1E6B42;}
 .btn.ok:active{transform:translateY(2px);box-shadow:none;}
 .marklegend{margin-top:6px;text-align:center;font-size:9.5px;color:#5F5E5A;}
@@ -195,7 +202,7 @@ h2.sec{font-size:16px;font-weight:900;color:var(--purple);margin-top:18px;
   .lg{font-size:10.5px;gap:5px 12px;margin-top:10px;}
   .marklegend{font-size:10.5px;margin-top:8px;}
 }
-@media (prefers-reduced-motion:reduce){*{transition:none!important;}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important;}}
 </style>
 </head>
 <body>
@@ -353,6 +360,19 @@ function calcScore(filled, ng){
   if([...Array(8)].every((_,i)=>has(`r${i}c${i}`))) lines++;
   if([...Array(8)].every((_,i)=>has(`r${i}c${7-i}`))) lines++;
   return { filledCount:n, lines, score: n + 4 + lines*2 };
+}
+
+/* 完成しているライン上のマスID集合（光る演出用。判定はcalcScoreと同じ＝×のマスは未記入扱い） */
+function litCells(filled, ng){
+  filled=filled||{}; ng=ng||{};
+  const has = id => FREE_IDS.has(id) || (!!filled[id] && !ng[id]);
+  const lit=new Set();
+  const addLine=ids=>{ if(ids.every(has)) ids.forEach(x=>lit.add(x)); };
+  for(let r=0;r<8;r++) addLine([...Array(8)].map((_,c)=>`r${r}c${c}`));
+  for(let c=0;c<8;c++) addLine([...Array(8)].map((_,r)=>`r${r}c${c}`));
+  addLine([...Array(8)].map((_,i)=>`r${i}c${i}`));
+  addLine([...Array(8)].map((_,i)=>`r${i}c${7-i}`));
+  return lit;
 }
 
 /* ---------- 画像圧縮（画質優先：長辺1400px・高画質から順に試して90万文字以下に収める） ---------- */
@@ -586,16 +606,17 @@ async function loadPhotosFor(owner,cache){
 }
 function loadMyPhotos(){ return loadPhotosFor(me,myPhotos); }
 
-function cellHtml(cell, photos, filled, editable, ng, ok){
+function cellHtml(cell, photos, filled, editable, ng, ok, lit){
+  const isLit=!!(lit && lit.has(cell.id));
   if(cell.cat==="fr"){
-    return `<div class="bc frcell"><div class="hole"><span>FREE</span></div></div>`;
+    return `<div class="bc frcell ${isLit?"lit":""}"><div class="hole"><span>FREE</span></div></div>`;
   }
   const cat=CATS[cell.cat];
   const done=!!filled[cell.id];
   const ph=photos?.[cell.id];
   const isNg=done && !!(ng||{})[cell.id];
   const isOk=done && !isNg && !!(ok||{})[cell.id];
-  return `<div class="bc ${cell.cat} ${editable?"editable":""} ${isNg?"ngcell":""} ${isOk?"okcell":""}" data-id="${cell.id}"
+  return `<div class="bc ${cell.cat} ${editable?"editable":""} ${isNg?"ngcell":""} ${isOk?"okcell":""} ${isLit?"lit":""}" data-id="${cell.id}"
     style="background:${cat.bg};color:${cat.tx};" role="${editable?"button":"img"}" tabindex="${editable?0:-1}">
     ${ph?`<img class="ph" src="${ph}" alt="">`:`<span>${cell.label.replace(/\n/g,"<br>")}</span>`}
     ${done&&!ph?`<span class="done">✓</span>`:""}
@@ -612,6 +633,7 @@ function renderBoard(){
   const b=boards[me]||{};
   const filled=b.filled||{}, ng=b.ng||{}, ok=b.ok||{};
   const {filledCount,lines,score}=calcScore(filled,ng);
+  const lit=litCells(filled,ng);
   const ngCount=Object.keys(ng).filter(id=>filled[id]).length;
   const log=(b.log||[]).slice(-6).reverse();
   // 誰かの更新で再描画されても、横スクロール位置とお題一覧の開閉は保つ
@@ -626,7 +648,7 @@ function renderBoard(){
     ${ngCount?`<div class="notice err">❌ ゲームマスターに×にされたマスが<b>${ngCount}コ</b>あるよ！赤い×のマスをタップして撮り直してね（撮り直すまで点数に入らないよ）</div>`:""}
     <div class="notice">マスをタップして、お題に合う写真をアップロード！追加・撮り直し・削除はいつでもOK。${store.demo?"<br>※お試しモード動作中":""}</div>
     <div class="card"><div class="boardscroll"><div class="bgrid">
-      ${CELLS.map(c=>cellHtml(c,myPhotos,filled,true,ng,ok)).join("")}
+      ${CELLS.map(c=>cellHtml(c,myPhotos,filled,true,ng,ok,lit)).join("")}
     </div></div>${legendHtml()}
     <div class="marklegend">⭕＝GMチェックOK ・ ❌＝撮り直してね ・ 印なし＝チェック待ち</div></div>
     <div class="scorebox">
@@ -806,6 +828,7 @@ async function renderPlayerBoard(name){
   const b=boards[name]||{};
   const filled=b.filled||{}, ng=b.ng||{}, ok=b.ok||{};
   const {filledCount,lines,score}=calcScore(filled,ng);
+  const lit=litCells(filled,ng);
   const gen=renderGen;
   const sc=app.querySelector(".boardscroll")?.scrollLeft ?? 0;
   app.innerHTML=`
@@ -814,7 +837,7 @@ async function renderPlayerBoard(name){
       <span class="cnt"><b>${filledCount}</b>マス ・ ライン${lines}本 ・ <b>${score}</b>点</span>
     </div>
     <div class="card"><div class="boardscroll"><div class="bgrid" id="pgrid">
-      ${CELLS.map(c=>cellHtml(c,{},filled,false,ng,ok)).join("")}
+      ${CELLS.map(c=>cellHtml(c,{},filled,false,ng,ok,lit)).join("")}
     </div></div>${legendHtml()}</div>
     <button class="btn ghost backbtn" id="back" style="width:100%;">← 結果にもどる</button>
     <div class="loading" id="pl">写真を読み込み中…</div>`;
@@ -904,6 +927,7 @@ async function renderGMBoard(name){
   const b=boards[name]||{};
   const filled=b.filled||{}, ng=b.ng||{}, ok=b.ok||{};
   const {filledCount,lines,score}=calcScore(filled,ng);
+  const lit=litCells(filled,ng);
   const raw=Object.keys(filled).length;
   const okc=Object.keys(ok).filter(id=>filled[id] && !ng[id]).length;
   const ngc=Object.keys(ng).filter(id=>filled[id]).length;
@@ -918,7 +942,7 @@ async function renderGMBoard(name){
     </div>
     <div class="notice">写真のあるマスをタップすると、拡大して〇×の判定ができるよ。<button class="smallbtn" id="greload" style="margin-left:6px;">写真を再読込</button></div>
     <div class="card"><div class="boardscroll"><div class="bgrid">
-      ${CELLS.map(c=>cellHtml(c,{},filled,false,ng,ok)).join("")}
+      ${CELLS.map(c=>cellHtml(c,{},filled,false,ng,ok,lit)).join("")}
     </div></div>${legendHtml()}
     <div class="marklegend">⭕＝チェックOK ・ ❌＝要撮り直し ・ 印なし＝チェック待ち</div></div>
     ${topicsHtml(b)}
@@ -952,6 +976,7 @@ function renderDemoBoard(){
   const b=boards[DEMO_NAME]||{};
   const filled=b.filled||{}, ng=b.ng||{}, ok=b.ok||{};
   const {filledCount,lines,score}=calcScore(filled,ng);
+  const lit=litCells(filled,ng);
   const ngCount=Object.keys(ng).filter(id=>filled[id]).length;
   const log=(b.log||[]).slice(-6).reverse();
   const sc=app.querySelector(".boardscroll")?.scrollLeft ?? 0;
@@ -965,7 +990,7 @@ function renderDemoBoard(){
     <div class="notice">ここは<b>GM専用のお試しボード</b>（ランキングには入らないよ）。マスをタップして写真アップを試してみて。アップしたら、GM画面の「写真チェック」で〇×判定の練習もできるよ。</div>
     ${ngCount?`<div class="notice err">❌ ×のマスが<b>${ngCount}コ</b>あるよ（メンバー本人にはこう見えるよ）</div>`:""}
     <div class="card"><div class="boardscroll"><div class="bgrid">
-      ${CELLS.map(c=>cellHtml(c,demoPhotos,filled,true,ng,ok)).join("")}
+      ${CELLS.map(c=>cellHtml(c,demoPhotos,filled,true,ng,ok,lit)).join("")}
     </div></div>${legendHtml()}
     <div class="marklegend">⭕＝GMチェックOK ・ ❌＝撮り直してね ・ 印なし＝チェック待ち</div></div>
     <div class="scorebox">
