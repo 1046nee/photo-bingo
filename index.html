@@ -121,8 +121,20 @@ button{font-family:inherit;cursor:pointer;}
 .rankrow.clickable{cursor:pointer;}
 .progress{height:7px;background:#EDEAE0;border-radius:4px;overflow:hidden;margin-top:4px;}
 .progress i{display:block;height:100%;background:var(--purple-lt);border-radius:4px;}
-.crown{font-size:18px;}
 .backbtn{margin-top:12px;}
+/* ---------- 集計ビンゴ（全員の回答を重ね合わせた盤面） ---------- */
+.bc.agg0{opacity:.38;}
+.aggnum{position:absolute;right:1px;bottom:1px;min-width:13px;height:13px;border-radius:7px;
+  background:var(--purple);color:#fff;font-size:9px;font-weight:900;
+  display:flex;align-items:center;justify-content:center;padding:0 2px;}
+.agggrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px;}
+.aggitem{cursor:pointer;}
+.aggph{aspect-ratio:1;border-radius:10px;background:#EDEAE0;overflow:hidden;
+  display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:11px;}
+.aggph img{width:100%;height:100%;object-fit:cover;}
+.aggname{text-align:center;font-size:12px;font-weight:700;margin-top:2px;}
+.aggnot{margin-top:10px;background:#F1EFE8;border-radius:10px;padding:8px 10px;
+  font-size:12px;color:#5F5E5A;line-height:1.6;}
 h2.sec{font-size:16px;font-weight:900;color:var(--purple);margin-top:18px;
   border-left:5px solid #7F77DD;padding-left:9px;}
 .countdown{background:var(--paper);border:2.5px dashed var(--purple);border-radius:14px;
@@ -208,6 +220,7 @@ h2.sec{font-size:16px;font-weight:900;color:var(--purple);margin-top:18px;
   .ngmark{font-size:36px;}
   .lg{font-size:10.5px;gap:5px 12px;margin-top:10px;}
   .marklegend{font-size:10.5px;margin-top:8px;}
+  .aggnum{min-width:17px;height:17px;border-radius:9px;font-size:11px;}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important;}}
 </style>
@@ -241,6 +254,10 @@ const MALE_MEMBERS = new Set(["かんじ","そら","わか","いむた"]);
 // ①-3 発表前の進捗の特別ルール：この人だけは全員の進捗が見える。
 //     逆に他のメンバーには、この人の進捗だけが公開される
 const PROGRESS_VIEWER = "あずみん";
+
+// ①-4 結果発表で下位3人に付く😈マークの対象外メンバー
+//     （この人が下位3人に入っていても😈は付かず、この人を除いた下から3人に付く）
+const DEVIL_EXEMPT = "あずみん";
 
 // ② 結果発表日時（この日時を過ぎると全員のビンゴと点数が見られる。UIの発表日時表示もここから出る）
 const RESULTS_AT = new Date("2026-08-12T12:00:00+09:00");
@@ -874,22 +891,51 @@ function renderResults(){
     return {name:n, ...s};
   });
   rows.sort((a,b)=>b.score-a.score);
+  // 同率順位（同点は同じ順位。次の人は人数ぶん飛んだ順位になる）
+  rows.forEach((r,i)=>{ r.rank = (i>0 && r.score===rows[i-1].score) ? rows[i-1].rank : i+1; });
+  const medal={1:"🥇",2:"🥈",3:"🥉"};
+  // 下位3人に😈（DEVIL_EXEMPTは免除し、その人を除いた下から3人に付ける）
+  const devils=new Set(rows.filter(r=>r.name!==DEVIL_EXEMPT).slice(-3).map(r=>r.name));
+  // 集計ビンゴ: 各お題に写真をアップした人数
+  const aggCounts={};
+  CELLS.forEach(c=>{ aggCounts[c.id]=MEMBERS.filter(n=>boards[n]?.filled?.[c.id]).length; });
+  const aggCell=c=>{
+    if(c.cat==="fr") return `<div class="bc frcell"><div class="hole"><span>FREE</span></div></div>`;
+    const cat=CATS[c.cat]; const n=aggCounts[c.id];
+    return `<div class="bc ${n?"":"agg0"}" data-agg="${c.id}" style="background:${cat.bg};color:${cat.tx};cursor:pointer;" role="button" tabindex="0">
+      <span>${c.label.replace(/\n/g,"<br>")}</span>
+      ${n?`<span class="aggnum">${n}</span>`:""}
+    </div>`;
+  };
 
   app.innerHTML=`
     <h2 class="sec">🎉 結果発表！</h2>
     <div class="rank">
-      ${rows.map((r,i)=>`
+      ${rows.map(r=>{
+        const marks=(medal[r.rank]||"")+(devils.has(r.name)?"😈":"");
+        return `
         <div class="rankrow clickable" data-n="${r.name}" role="button" tabindex="0">
-          <span class="pos">${i===0?'<span class="crown">👑</span>':i+1}</span>
-          <span class="nm">${r.name}<div class="detail">${r.filledCount}マス ＋ FREE4点 ＋ ライン${r.lines}本×2点</div></span>
-          <span class="score">${r.score}<small>点</small></span>
-        </div>`).join("")}
+          <span class="pos">${r.rank}</span>
+          <span class="nm">${r.name}<div class="detail">${r.filledCount}マス×1点＋ライン${r.lines}本×2点＋FREE4マス×1点</div></span>
+          <span class="score">${marks?marks+" ":""}${r.score}<small>点</small></span>
+        </div>`;
+      }).join("")}
     </div>
-    <p style="font-size:12px;color:var(--muted);text-align:center;margin-top:10px;">名前をタップするとその人のフォトビンゴが見られます</p>`;
+    <p style="font-size:12px;color:var(--muted);text-align:center;margin-top:10px;">名前をタップするとその人のフォトビンゴが見られます</p>
+    <h2 class="sec">🧩 みんなの集計ビンゴ</h2>
+    <p style="font-size:12px;color:var(--muted);margin-top:6px;line-height:1.7;">全員のビンゴを重ね合わせた盤面だよ。<b>数字＝写真をアップした人数</b>。マスをタップするとみんなの写真が見られるよ（うすいマス＝まだ誰も撮っていないお題）</p>
+    <div class="card"><div class="boardscroll"><div class="bgrid">
+      ${CELLS.map(aggCell).join("")}
+    </div></div>${legendHtml()}</div>`;
   app.querySelectorAll(".rankrow.clickable").forEach(el=>{
     const open=()=>{ view="player:"+el.dataset.n; render(); };
     el.onclick=open;
     el.onkeydown=e=>{ if(e.key==="Enter"){open();} };
+  });
+  app.querySelectorAll(".bc[data-agg]").forEach(el=>{
+    const open=()=>aggSquare(el.dataset.agg);
+    el.onclick=open;
+    el.onkeydown=e=>{ if(e.key==="Enter"||e.key===" "){e.preventDefault();open();} };
   });
 }
 
@@ -919,6 +965,48 @@ function viewSquare(name,id){
     const v=ov.querySelector("#vpv");
     if(img) v.src=img; else v.remove();
   }).catch(()=>{ const v=ov.querySelector("#vpv"); if(v) v.remove(); });
+}
+
+/* ---------- 集計ビンゴのマス詳細（誰が回答したか＋みんなの写真を1画面で） ---------- */
+async function aggSquare(id){
+  const cell=CELLS.find(c=>c.id===id);
+  const cat=CATS[cell.cat];
+  const label=cell.label.replace(/\n/g,"");
+  const who=MEMBERS.filter(n=>boards[n]?.filled?.[id]);
+  const not=MEMBERS.filter(n=>!boards[n]?.filled?.[id]);
+  const ov=document.createElement("div");
+  ov.className="overlay";
+  ov.innerHTML=`
+    <div class="modal">
+      <h3>${label}</h3>
+      <div class="center">
+        <span class="cattag" style="background:${cat.bg};color:${cat.tx};">${cat.name}</span>
+        <span class="cattag" style="background:#EEEDFE;color:#3C3489;">${who.length}人が回答</span>
+      </div>
+      ${who.length?`<div class="agggrid">
+        ${who.map(n=>`<div class="aggitem" data-n="${n}" role="button" tabindex="0">
+          <div class="aggph">読み込み中…</div><div class="aggname">${n}</div>
+        </div>`).join("")}
+      </div>`:`<p style="text-align:center;font-size:13px;color:var(--muted);margin-top:14px;">まだ誰も撮っていないお題だよ</p>`}
+      ${not.length?`<div class="aggnot">まだの人: ${not.join("・")}</div>`:""}
+      <div class="mbtns"><button class="btn plain" id="aclose">閉じる</button></div>
+    </div>`;
+  document.body.appendChild(ov);
+  ov.querySelector("#aclose").onclick=()=>ov.remove();
+  ov.onclick=e=>{ if(e.target===ov) ov.remove(); };
+  // 写真をタップすると、その人の拡大写真（コメント付き）を上に重ねて表示
+  ov.querySelectorAll(".aggitem").forEach(el=>{
+    el.onclick=()=>viewSquare(el.dataset.n, id);
+  });
+  for(const n of who){
+    let img=null;
+    try{ img=await getPhotoCached(n,id); }catch(e){}
+    if(!ov.isConnected) return;
+    const ph=ov.querySelector(`.aggitem[data-n="${n}"] .aggph`);
+    if(!ph) continue;
+    if(img) ph.innerHTML=`<img src="${img}" alt="">`;
+    else ph.textContent="写真なし";
+  }
 }
 
 async function renderPlayerBoard(name){
