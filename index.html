@@ -215,6 +215,13 @@ h2.sec{font-size:16px;font-weight:900;color:var(--purple);margin-top:18px;
 .histline{font-size:12px;margin-top:6px;line-height:1.6;}
 .histline.h-ok{background:#E1F5EE;color:#085041;border-radius:8px;padding:4px 8px;}
 .histline.h-ng{background:#FCEBEB;color:#791F1F;border-radius:8px;padding:4px 8px;}
+.histline.h-cmt{background:#EEEDFE;color:#3C3489;border-radius:8px;padding:4px 8px;}
+.histline.h-gmcmt{background:#FAEEDA;color:#633806;border-radius:8px;padding:4px 8px;}
+.ct-me{color:#1E7A4C;font-weight:700;}   /* かっこ内: 本人のコメント=緑 */
+.ct-gm{color:#C86A15;font-weight:700;}   /* かっこ内: GMのコメント=オレンジ */
+.histdate{display:flex;align-items:center;gap:8px;margin:10px 0 2px;
+  color:var(--muted);font-size:10.5px;font-weight:900;}
+.histdate::before,.histdate::after{content:"";flex:1;height:1.5px;background:#D8D5CA;border-radius:1px;}
 .histtime{color:var(--muted);font-size:10.5px;margin-right:4px;}
 
 /* ---------- NG / OK mark / password ---------- */
@@ -571,6 +578,7 @@ const revealParam=new URLSearchParams(location.search).get("reveal")==="1";
 const canReveal=()=>now()>=RESULTS_AT || revealParam;
 const fmt=d=>d.toLocaleString("ja-JP",{timeZone:"Asia/Tokyo",month:"numeric",day:"numeric",hour:"2-digit",minute:"2-digit"});
 const fmtFull=d=>d.toLocaleString("ja-JP",{timeZone:"Asia/Tokyo",month:"numeric",day:"numeric",weekday:"short",hour:"2-digit",minute:"2-digit"});   // 履歴用: 8/5(火) 01:02
+const fmtDate=d=>d.toLocaleDateString("ja-JP",{timeZone:"Asia/Tokyo",month:"numeric",day:"numeric",weekday:"short"});   // 日付区切り用: 8/5(火)
 const esc=s=>String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
 async function getPhotoCached(name,id){
   const k=`${name}_${id}`;
@@ -741,7 +749,8 @@ function topicsHtml(board){
 }
 
 function histLine(e, who){
-  const t=e.text?`（💬 ${esc(e.text)}）`:"";   // コメント内容も履歴に残す
+  // コメント内容も履歴に残す（本人の発言=緑、GMのコメント=オレンジで色分け）
+  const t=e.text?`（<span class="${e.type==="gmcmt"?"ct-gm":"ct-me"}">💬 ${esc(e.text)}</span>）`:"";
   const msg={
     ok:`⭕ 「${esc(e.label)}」がゲームマスターに<b>〇</b>をもらったよ！`,
     ng:`❌ 「${esc(e.label)}」がゲームマスターに<b>×</b>にされたよ。撮り直してね！`,
@@ -754,8 +763,19 @@ function histLine(e, who){
     gmcmt:`🔑 「${esc(e.label)}」にゲームマスターからコメントが付いたよ${t}`,
   }[e.type]||"";
   if(!msg) return "";
-  const cls={ok:"h-ok", ng:"h-ng"}[e.type]||"";   // 〇=緑・×=赤で一目でわかるように
+  const cls={ok:"h-ok", ng:"h-ng", cmt:"h-cmt", gmcmt:"h-gmcmt"}[e.type]||"";   // 〇=緑・×=赤・コメント=青紫/オレンジで一目でわかるように
   return `<div class="histline ${cls}"><span class="histtime">${fmtFull(new Date(e.ts))}</span>${who?`<b>${who}</b>: `:""}${msg}</div>`;
+}
+
+/* きろく一覧のHTML（日付が変わる境目に「── 8/5(火) ──」の区切り線を入れる） */
+function histListHtml(entries, withWho){
+  let out="", lastDay="";
+  for(const e of entries){
+    const day=fmtDate(new Date(e.ts));
+    if(day!==lastDay){ out+=`<div class="histdate">${day}</div>`; lastDay=day; }
+    out+=histLine(e, withWho?e.who:undefined);
+  }
+  return out;
 }
 
 /* きろくの開閉ブロック（新しい順に全件。長いときは中でスクロール） */
@@ -763,7 +783,7 @@ function histHtml(board){
   const log=(board?.log||[]).slice().reverse();
   if(!log.length) return "";
   return `<details class="histd"><summary>📋 これまでのきろく（${log.length}件）</summary>
-    <div class="histscroll">${log.map(e=>histLine(e)).join("")}</div>
+    <div class="histscroll">${histListHtml(log)}</div>
   </details>`;
 }
 
@@ -774,7 +794,7 @@ function gmAllHist(){
   all.sort((a,b)=>b.ts-a.ts);
   if(!all.length) return "";
   return `<details class="histd"><summary>📋 みんなのきろく（全員分・${all.length}件）</summary>
-    <div class="histscroll">${all.map(e=>histLine(e,e.who)).join("")}</div>
+    <div class="histscroll">${histListHtml(all,true)}</div>
   </details>`;
 }
 
