@@ -159,9 +159,10 @@ h2.sec{font-size:16px;font-weight:900;color:var(--purple);margin-top:18px;
 .prize{margin-top:10px;background:#FAEEDA;color:#633806;border:1.5px dashed #E0A947;
   border-radius:12px;padding:10px 12px;font-size:13.5px;font-weight:700;
   text-align:center;line-height:1.9;}
-.topics{background:var(--paper);border:2.5px solid var(--purple);border-radius:14px;
+.topics,.histd{background:var(--paper);border:2.5px solid var(--purple);border-radius:14px;
   margin-top:12px;padding:10px 14px;}
-.topics summary{font-weight:900;color:var(--purple);cursor:pointer;font-size:13.5px;padding:4px 0;}
+.topics summary,.histd summary{font-weight:900;color:var(--purple);cursor:pointer;font-size:13.5px;padding:4px 0;}
+.histscroll{max-height:300px;overflow-y:auto;margin-top:4px;}
 .topicgroup{margin-top:10px;}
 .topichead{font-size:12px;font-weight:900;}
 .chipcols{display:grid;grid-template-columns:1fr 1fr;gap:4px 6px;margin-top:4px;align-items:start;}
@@ -548,6 +549,7 @@ let renderGen=0;        // 描画の世代番号（再描画時に古い写真�
 let view="board";       // board | results | player:名前 | pass | gm | gmplayer:名前 | gmdemo
 let lastHistKey=null;   // ブラウザ履歴に記録済みの画面（view|名前）。同じ画面の重複pushを防ぐ
 let popNav=false;       // 戻る/進む起因の描画では履歴を積まない（replaceで整合だけ取る）
+let playerBack="results";   // 個人ボードの「← 結果にもどる」の戻り先（GMプレビューから開いたときは gmresults）
 const app=document.getElementById("app");
 const tabs=document.getElementById("tabs");
 const now=()=>new Date();
@@ -590,17 +592,22 @@ function render(){
 
   document.getElementById("tab-board").classList.toggle("on",view==="board");
   document.getElementById("tab-results").classList.toggle("on",view==="results"||view.startsWith("player:"));
-  const noTabs = !me || view==="pass" || view==="gm" || view==="gmdemo" || view.startsWith("gmplayer:");
+  const noTabs = !me || view==="pass" || view==="gm" || view==="gmdemo" || view==="gmresults" || view.startsWith("gmplayer:");
   tabs.classList.toggle("hidden",noTabs);
 
   if(view==="pass") return renderPass();
   if(view==="gm") return gmOK ? renderGM() : renderGMPass();
   if(view==="gmdemo") return gmOK ? renderDemoBoard() : renderGMPass();
+  if(view==="gmresults") return gmOK ? renderGMResults() : renderGMPass();
   if(view.startsWith("gmplayer:")) return gmOK ? renderGMBoard(view.slice(9)) : renderGMPass();
+  if(view.startsWith("player:")){
+    // 個人ボードの閲覧は発表後は誰でも、発表前はGM（プレビュー経由）のみ
+    if(canReveal() || gmOK) return renderPlayerBoard(view.slice(7));
+    view="results";
+  }
   if(!me) return renderNamePick();
   if(view==="board") renderBoard();
   else if(view==="results") renderResults();
-  else if(view.startsWith("player:")) renderPlayerBoard(view.slice(7));
 }
 
 function renderNamePick(){
@@ -735,6 +742,15 @@ function histLine(e){
   return `<div class="histline"><span class="histtime">${fmt(new Date(e.ts))}</span>${msg}</div>`;
 }
 
+/* きろくの開閉ブロック（新しい順に全件。長いときは中でスクロール） */
+function histHtml(board){
+  const log=(board?.log||[]).slice().reverse();
+  if(!log.length) return "";
+  return `<details class="histd"><summary>📋 これまでのきろく（${log.length}件）</summary>
+    <div class="histscroll">${log.map(histLine).join("")}</div>
+  </details>`;
+}
+
 async function loadPhotosFor(owner,cache){
   const filled = boards[owner]?.filled || {};
   await Promise.all(Object.keys(filled).map(async id=>{
@@ -772,10 +788,10 @@ function renderBoard(){
   const {filledCount,lines,score}=calcScore(filled,ng);
   const lit=litCells(filled,ng);
   const ngCount=Object.keys(ng).filter(id=>filled[id]).length;
-  const log=(b.log||[]).slice(-6).reverse();
-  // 誰かの更新で再描画されても、横スクロール位置とお題一覧の開閉は保つ
+  // 誰かの更新で再描画されても、横スクロール位置と各開閉ブロックの状態は保つ
   const sc=app.querySelector(".boardscroll")?.scrollLeft ?? 0;
   const topicsOpen=app.querySelector("details.topics")?.open ?? false;
+  const histOpen=app.querySelector("details.histd")?.open ?? false;
   app.innerHTML=`
     <div class="statusbar">
       <span class="who">${me}</span>
@@ -794,10 +810,11 @@ function renderBoard(){
       <div class="scoredetail">マス ${filledCount}点 ＋ FREE 4点 ＋ ライン${lines}本×2点${ngCount?"<br>（×のマスは点数に入らないよ）":""}</div>
       ${stageHtml(score)}
     </div>
-    ${log.length?`<div class="histbox"><div class="histhead">📋 これまでのきろく（アップ・コメント・GMチェック）</div>${log.map(histLine).join("")}</div>`:""}
+    ${histHtml(b)}
     ${topicsHtml(b)}`;
   const bs=app.querySelector(".boardscroll"); if(bs&&sc) bs.scrollLeft=sc;
   if(topicsOpen){ const tp=app.querySelector("details.topics"); if(tp) tp.open=true; }
+  if(histOpen){ const hb=app.querySelector("details.histd"); if(hb) hb.open=true; }
   document.getElementById("switch").onclick=()=>{
     me=null; myPhotos={}; view="board"; render();
   };
@@ -981,6 +998,13 @@ function renderResults(){
         <div class="rank">${progRows}</div>`:""}`;
     return;
   }
+  renderRevealed(false);
+}
+
+/* GM用: 現時点での結果発表をプレビュー（メンバーには見えない） */
+function renderGMResults(){ renderRevealed(true); }
+
+function renderRevealed(isGm){
   const rows=MEMBERS.map(n=>{
     const s=calcScore(boards[n]?.filled, boards[n]?.ng);
     return {name:n, ...s};
@@ -1004,6 +1028,7 @@ function renderResults(){
   };
 
   app.innerHTML=`
+    ${isGm?`<div class="notice">🔑 GMプレビュー: いま発表するとこうなるよ（メンバーには ${fmt(RESULTS_AT)} まで見えないよ）</div>`:""}
     <h2 class="sec">🎉 結果発表！</h2>
     <div class="rank">
       ${rows.map(r=>{
@@ -1021,9 +1046,10 @@ function renderResults(){
     <p style="font-size:12px;color:var(--muted);margin-top:6px;line-height:1.7;">全員のビンゴを重ね合わせた盤面だよ。<b>数字＝写真をアップした人数</b>。マスをタップするとみんなの写真が見られるよ（うすいマス＝まだ誰も撮っていないお題）</p>
     <div class="card"><div class="boardscroll"><div class="bgrid">
       ${CELLS.map(aggCell).join("")}
-    </div></div>${legendHtml()}</div>`;
+    </div></div>${legendHtml()}</div>
+    ${isGm?`<div class="mbtns"><button class="btn ghost" id="gmresback">← GM画面にもどる</button></div>`:""}`;
   app.querySelectorAll(".rankrow.clickable").forEach(el=>{
-    const open=()=>{ view="player:"+el.dataset.n; render(); };
+    const open=()=>{ playerBack=isGm?"gmresults":"results"; view="player:"+el.dataset.n; render(); };
     el.onclick=open;
     el.onkeydown=e=>{ if(e.key==="Enter"){open();} };
   });
@@ -1032,6 +1058,7 @@ function renderResults(){
     el.onclick=open;
     el.onkeydown=e=>{ if(e.key==="Enter"||e.key===" "){e.preventDefault();open();} };
   });
+  if(isGm){ document.getElementById("gmresback").onclick=()=>{ view="gm"; render(); }; }
 }
 
 /* ---------- 閲覧用モーダル（発表後のみんなのビンゴで写真とコメントを拡大表示） ---------- */
@@ -1123,7 +1150,7 @@ async function renderPlayerBoard(name){
     <button class="btn ghost backbtn" id="back" style="width:100%;">← 結果にもどる</button>
     <div class="loading" id="pl">写真を読み込み中…</div>`;
   const bs=app.querySelector(".boardscroll"); if(bs&&sc) bs.scrollLeft=sc;
-  document.getElementById("back").onclick=()=>{ view="results"; render(); };
+  document.getElementById("back").onclick=()=>{ view=playerBack; render(); };
   app.querySelectorAll(".bc[data-id]").forEach(el=>{
     const id=el.dataset.id;
     if(!filled[id]) return;
@@ -1203,10 +1230,12 @@ function renderGM(){
       </div>
     </div>
     <div class="mbtns">
+      <button class="btn ghost" id="gmpreview">🎉 いまの結果発表をプレビュー</button>
       <button class="btn ghost" id="gmback">← 名前選択にもどる</button>
     </div>`;
   app.querySelectorAll(".smallbtn[data-n]").forEach(bt=>bt.onclick=()=>{ view="gmplayer:"+bt.dataset.n; render(); });
   document.getElementById("demoup").onclick=()=>{ view="gmdemo"; render(); };
+  document.getElementById("gmpreview").onclick=()=>{ view="gmresults"; render(); };
   document.getElementById("gmback").onclick=()=>{ gmOK=false; view="board"; render(); };   // 出たら次回また要パスワード
 }
 
@@ -1221,6 +1250,7 @@ async function renderGMBoard(name){
   const gen=renderGen;
   const sc=app.querySelector(".boardscroll")?.scrollLeft ?? 0;
   const topicsOpen=app.querySelector("details.topics")?.open ?? false;
+  const histOpen=app.querySelector("details.histd")?.open ?? false;
   app.innerHTML=`
     <div class="statusbar">
       <span class="who">${dispName(name)}</span>
@@ -1232,10 +1262,12 @@ async function renderGMBoard(name){
       ${CELLS.map(c=>cellHtml(c,{},filled,false,ng,ok,lit)).join("")}
     </div></div>${legendHtml()}
     <div class="marklegend"><span style="color:#2F9E63;font-weight:700;">⭕＝チェックOK</span> ・ <span style="color:#C22B2B;font-weight:700;">❌＝要撮り直し</span> ・ <span style="color:#9A6B00;font-weight:700;">印なし＝チェック待ち</span></div></div>
+    ${histHtml(b)}
     ${topicsHtml(b)}
     <div class="loading" id="pl">写真を読み込み中…</div>`;
   const bs=app.querySelector(".boardscroll"); if(bs&&sc) bs.scrollLeft=sc;
   if(topicsOpen){ const tp=app.querySelector("details.topics"); if(tp) tp.open=true; }
+  if(histOpen){ const hb=app.querySelector("details.histd"); if(hb) hb.open=true; }
   document.getElementById("gback").onclick=()=>{ view="gm"; render(); };
   document.getElementById("greload").onclick=()=>{
     Object.keys(gmPhotos).forEach(k=>{ if(k.startsWith(name+"_")) delete gmPhotos[k]; });
@@ -1265,9 +1297,9 @@ function renderDemoBoard(){
   const {filledCount,lines,score}=calcScore(filled,ng);
   const lit=litCells(filled,ng);
   const ngCount=Object.keys(ng).filter(id=>filled[id]).length;
-  const log=(b.log||[]).slice(-6).reverse();
   const sc=app.querySelector(".boardscroll")?.scrollLeft ?? 0;
   const topicsOpen=app.querySelector("details.topics")?.open ?? false;
+  const histOpen=app.querySelector("details.histd")?.open ?? false;
   app.innerHTML=`
     <div class="statusbar">
       <span class="who">🧪 お試し</span>
@@ -1286,10 +1318,11 @@ function renderDemoBoard(){
       <div class="scoredetail">マス ${filledCount}点 ＋ FREE 4点 ＋ ライン${lines}本×2点</div>
       ${stageHtml(score)}
     </div>
-    ${log.length?`<div class="histbox"><div class="histhead">📋 これまでのきろく（メンバー本人にはこう見えるよ）</div>${log.map(histLine).join("")}</div>`:""}
+    ${histHtml(b)}
     ${topicsHtml(b)}`;
   const bs=app.querySelector(".boardscroll"); if(bs&&sc) bs.scrollLeft=sc;
   if(topicsOpen){ const tp=app.querySelector("details.topics"); if(tp) tp.open=true; }
+  if(histOpen){ const hb=app.querySelector("details.histd"); if(hb) hb.open=true; }
   document.getElementById("gback").onclick=()=>{ view="gm"; render(); };
   app.querySelectorAll(".bc.editable").forEach(el=>{
     const open=()=>openSquare(el.dataset.id, DEMO_NAME, demoPhotos);
