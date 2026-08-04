@@ -147,6 +147,13 @@ h2.sec{font-size:16px;font-weight:900;color:var(--purple);margin-top:18px;
 .countdown{background:var(--paper);border:2.5px dashed var(--purple);border-radius:14px;
   padding:14px;text-align:center;margin-top:12px;font-size:13px;line-height:1.7;}
 .countdown b{font-size:17px;color:var(--purple);}
+/* 順位の奇数/偶数ヒント */
+.paritybox{background:var(--paper);border:2.5px solid var(--purple);border-radius:14px;
+  margin-top:12px;padding:12px 14px;text-align:center;font-size:13.5px;font-weight:700;line-height:2;}
+.paritybox b{font-size:18px;padding:1px 12px;border-radius:9px;color:#fff;}
+.paritybox b.podd{background:#5B4BC4;}
+.paritybox b.peven{background:#C75BAB;}
+.paritybox span{font-size:11px;color:var(--muted);font-weight:700;}
 
 /* ---------- name colors ---------- */
 .namebtn.boy{border-color:#2E63B0;color:#2E63B0;box-shadow:0 3px 0 rgba(46,99,176,.25);}
@@ -288,6 +295,10 @@ const PROGRESS_VIEWER = "あずみん";
 // ①-4 結果発表で下位3人に付く😈マークの対象外メンバー
 //     （この人が下位3人に入っていても😈は付かず、この人を除いた下から3人に付く）
 const DEVIL_EXEMPT = "あずみん";
+
+// ①-5 順位ヒント（自分の順位が奇数か偶数かだけ見られる）の公開期限。
+//     この日時を過ぎると奇数/偶数もわからなくなる（発表まで完全シークレット）
+const PARITY_UNTIL = new Date("2026-08-10T00:00:00+09:00");   // 8/9 いっぱいまで
 
 // ② 結果発表日時（この日時を過ぎると全員のビンゴと点数が見られる。UIの発表日時表示もここから出る）
 const RESULTS_AT = new Date("2026-08-12T12:00:00+09:00");
@@ -1003,12 +1014,28 @@ function renderResults(){
         <span class="detail"><b>${s.filledCount}</b>/60マス ・ <b>${s.score}</b>点</span>
       </div>`;
     }).join("");
+    // 順位の奇数/偶数ヒント（PARITY_UNTILまで。何位かは教えない）
+    let parityHtml="";
+    if(me){
+      if(now()<PARITY_UNTIL){
+        const rr=MEMBERS.map(n=>({name:n, score:calcScore(boards[n]?.filled, boards[n]?.ng).score}));
+        rr.sort((a,b)=>b.score-a.score);
+        rr.forEach((r,i)=>{ r.rank=(i>0&&r.score===rr[i-1].score)?rr[i-1].rank:i+1; });
+        const myRank=rr.find(r=>r.name===me)?.rank;
+        const odd=myRank%2===1;
+        parityHtml=`<div class="paritybox">🔮 いまのきみの順位は……<b class="${odd?"podd":"peven"}">${odd?"奇数":"偶数"}</b>！<br>
+          <span>何位かはヒミツ🤫（このヒントは 8/9 までの限定公開だよ）</span></div>`;
+      }else{
+        parityHtml=`<div class="paritybox">🔮 順位ヒント（奇数/偶数）の公開はおわったよ。<br><span>ここからは発表までぜんぶシークレット！おたのしみに🤫</span></div>`;
+      }
+    }
     app.innerHTML=`
       <div class="countdown">結果発表は <b>${fmt(RESULTS_AT)}</b>！<br>
         ${isViewer
           ?`👀 ${esc(PROGRESS_VIEWER)}は特別に、みんなの進捗が見えるよ<br>`
           :`みんなの進み具合は発表までナイショだよ🤫<br>`}
         発表になったら、ここで<b>みんなの順位とビンゴ</b>が見られるよ🎉</div>
+      ${parityHtml}
       ${targets.length?`
         <h2 class="sec">👀 ${isViewer?"みんなの進捗":`${esc(PROGRESS_VIEWER)}の進捗（特別公開中）`}</h2>
         <div class="rank">${progRows}</div>`:""}`;
