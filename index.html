@@ -56,13 +56,14 @@ button{font-family:inherit;cursor:pointer;}
 .bc .done{position:absolute;right:2px;bottom:2px;width:11px;height:11px;border-radius:50%;
   background:var(--purple);color:#fff;font-size:8px;display:flex;align-items:center;justify-content:center;}
 .bc.editable{cursor:pointer;}
-.frcell{background:var(--paper);border:1.5px dashed #B4B2A9;}
-.hole{width:80%;height:80%;border-radius:50%;
-  background:radial-gradient(circle at 38% 32%,#55504A 0%,#35322D 55%,#1F1D1A 100%);
+.frcell{background:radial-gradient(circle at 50% 45%,#E2DDD0 0%,var(--paper) 75%);border:1.5px dashed #B4B2A9;}
+.hole{width:88%;height:88%;border-radius:50%;
+  background:radial-gradient(circle at 35% 28%,#4A453E 0%,#2A2722 42%,#0F0E0C 78%,#000 100%);
   display:flex;align-items:center;justify-content:center;
-  box-shadow:inset 0 2px 5px rgba(0,0,0,.55),0 1px 0 #fff;}
-.hole span{color:var(--paper);font-weight:900;font-size:7px;letter-spacing:1px;
-  transform:rotate(-12deg);}
+  box-shadow:inset 0 4px 9px rgba(0,0,0,.85),inset 0 -1px 2px rgba(255,255,255,.14),
+    0 1px 0 #fff,0 0 0 2.5px #C8A24A,0 0 8px 2px rgba(245,185,58,.5);}
+.hole span{color:#F5CE6E;font-weight:900;font-size:7px;letter-spacing:1px;
+  transform:rotate(-12deg);text-shadow:0 1px 2px rgba(0,0,0,.9);}
 .lg{display:flex;flex-wrap:wrap;justify-content:center;gap:4px 9px;margin-top:8px;
   font-size:9.5px;color:#5F5E5A;}
 .lg span{display:flex;align-items:center;gap:4px;}
@@ -205,6 +206,8 @@ h2.sec{font-size:16px;font-weight:900;color:var(--purple);margin-top:18px;
   margin-top:12px;padding:10px 14px;}
 .histhead{font-size:13px;font-weight:900;color:var(--purple);}
 .histline{font-size:12px;margin-top:6px;line-height:1.6;}
+.histline.h-ok{background:#E1F5EE;color:#085041;border-radius:8px;padding:4px 8px;}
+.histline.h-ng{background:#FCEBEB;color:#791F1F;border-radius:8px;padding:4px 8px;}
 .histtime{color:var(--muted);font-size:10.5px;margin-right:4px;}
 
 /* ---------- NG / OK mark / password ---------- */
@@ -556,6 +559,7 @@ const now=()=>new Date();
 const revealParam=new URLSearchParams(location.search).get("reveal")==="1";
 const canReveal=()=>now()>=RESULTS_AT || revealParam;
 const fmt=d=>d.toLocaleString("ja-JP",{timeZone:"Asia/Tokyo",month:"numeric",day:"numeric",hour:"2-digit",minute:"2-digit"});
+const fmtFull=d=>d.toLocaleString("ja-JP",{timeZone:"Asia/Tokyo",month:"numeric",day:"numeric",weekday:"short",hour:"2-digit",minute:"2-digit"});   // 履歴用: 8/5(火) 01:02
 const esc=s=>String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
 async function getPhotoCached(name,id){
   const k=`${name}_${id}`;
@@ -725,7 +729,7 @@ function topicsHtml(board){
   </details>`;
 }
 
-function histLine(e){
+function histLine(e, who){
   const t=e.text?`（💬 ${esc(e.text)}）`:"";   // コメント内容も履歴に残す
   const msg={
     ok:`⭕ 「${esc(e.label)}」がゲームマスターに<b>〇</b>をもらったよ！`,
@@ -739,7 +743,8 @@ function histLine(e){
     gmcmt:`🔑 「${esc(e.label)}」にゲームマスターからコメントが付いたよ${t}`,
   }[e.type]||"";
   if(!msg) return "";
-  return `<div class="histline"><span class="histtime">${fmt(new Date(e.ts))}</span>${msg}</div>`;
+  const cls={ok:"h-ok", ng:"h-ng"}[e.type]||"";   // 〇=緑・×=赤で一目でわかるように
+  return `<div class="histline ${cls}"><span class="histtime">${fmtFull(new Date(e.ts))}</span>${who?`<b>${who}</b>: `:""}${msg}</div>`;
 }
 
 /* きろくの開閉ブロック（新しい順に全件。長いときは中でスクロール） */
@@ -747,7 +752,18 @@ function histHtml(board){
   const log=(board?.log||[]).slice().reverse();
   if(!log.length) return "";
   return `<details class="histd"><summary>📋 これまでのきろく（${log.length}件）</summary>
-    <div class="histscroll">${log.map(histLine).join("")}</div>
+    <div class="histscroll">${log.map(e=>histLine(e)).join("")}</div>
+  </details>`;
+}
+
+/* GM画面用: 全員のきろくをまとめて新しい順に（誰の操作かも表示） */
+function gmAllHist(){
+  const all=[];
+  MEMBERS.forEach(n=>(boards[n]?.log||[]).forEach(e=>all.push({...e, who:n})));
+  all.sort((a,b)=>b.ts-a.ts);
+  if(!all.length) return "";
+  return `<details class="histd"><summary>📋 みんなのきろく（全員分・${all.length}件）</summary>
+    <div class="histscroll">${all.map(e=>histLine(e,e.who)).join("")}</div>
   </details>`;
 }
 
@@ -1198,6 +1214,7 @@ function renderGMPass(){
 }
 
 function renderGM(){
+  const histOpen=app.querySelector("details.histd")?.open ?? false;
   app.innerHTML=`
     <h2 class="sec">🔑 ゲームマスター画面</h2>
     <div class="notice">この画面はメンバーには見せないでね。<b>パスワードを忘れた人</b>がいたら、ここで確認して教えてあげよう。</div>
@@ -1219,6 +1236,7 @@ function renderGM(){
       }).join("")}
     </div>
     <p style="font-size:12px;color:var(--muted);margin-top:10px;line-height:1.7;">「写真チェック」でその人のビンゴを開いて、写真のあるマスをタップすると〇×の判定ができるよ。判定は本人の画面にマークとお知らせで伝わるよ。×のマスは撮り直すまで点数に入らないよ。</p>
+    ${gmAllHist()}
     <h2 class="sec">🧪 お試しボード（GM練習用）</h2>
     <div class="rank">
       <div class="rankrow">
@@ -1233,6 +1251,7 @@ function renderGM(){
       <button class="btn ghost" id="gmpreview">🎉 いまの結果発表をプレビュー</button>
       <button class="btn ghost" id="gmback">← 名前選択にもどる</button>
     </div>`;
+  if(histOpen){ const hb=app.querySelector("details.histd"); if(hb) hb.open=true; }
   app.querySelectorAll(".smallbtn[data-n]").forEach(bt=>bt.onclick=()=>{ view="gmplayer:"+bt.dataset.n; render(); });
   document.getElementById("demoup").onclick=()=>{ view="gmdemo"; render(); };
   document.getElementById("gmpreview").onclick=()=>{ view="gmresults"; render(); };
