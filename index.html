@@ -238,6 +238,10 @@ const MEMBERS = ["かんじ","そら","わか","いむた","ゆりな","おん",
 // ①-2 名前ボタンが青色になるメンバー（男子）。ここに無い名前は赤色（女子）になる
 const MALE_MEMBERS = new Set(["かんじ","そら","わか","いむた"]);
 
+// ①-3 発表前の進捗の特別ルール：この人だけは全員の進捗が見える。
+//     逆に他のメンバーには、この人の進捗だけが公開される
+const PROGRESS_VIEWER = "あずみん";
+
 // ② 結果発表日時（この日時を過ぎると全員のビンゴと点数が見られる。UIの発表日時表示もここから出る）
 const RESULTS_AT = new Date("2026-08-12T12:00:00+09:00");
 
@@ -840,12 +844,29 @@ function openSquare(id, owner=me, cache=myPhotos){
 /* ---------- みんなの状況 / 結果発表 ---------- */
 function renderResults(){
   const revealed=canReveal();
-  // 発表前はみんなの進み具合を一切見せない（発表の予告だけ）
+  // 発表前の進捗は特別ルール：PROGRESS_VIEWER本人は全員の進捗が見える。
+  // 他のメンバーにはPROGRESS_VIEWERの進捗だけが公開される（それ以外はナイショ）
   if(!revealed){
+    const isViewer = me===PROGRESS_VIEWER;
+    const targets = isViewer ? MEMBERS : (me ? [PROGRESS_VIEWER] : []);
+    const progRows = targets.map(n=>{
+      const s=calcScore(boards[n]?.filled, boards[n]?.ng);
+      return `<div class="rankrow locked">
+        <span class="nm">${n}
+          <div class="progress"><i style="width:${Math.round(s.filledCount/60*100)}%"></i></div>
+        </span>
+        <span class="detail">${s.filledCount}/60</span>
+      </div>`;
+    }).join("");
     app.innerHTML=`
       <div class="countdown">結果発表は <b>${fmt(RESULTS_AT)}</b>！<br>
-        それまで、みんなの進み具合はナイショだよ🤫<br>
-        発表になったら、ここで<b>みんなの順位とビンゴ</b>が見られるよ🎉</div>`;
+        ${isViewer
+          ?`👀 ${esc(PROGRESS_VIEWER)}は特別に、みんなの進捗が見えるよ<br>`
+          :`みんなの進み具合は発表までナイショだよ🤫<br>`}
+        発表になったら、ここで<b>みんなの順位とビンゴ</b>が見られるよ🎉</div>
+      ${targets.length?`
+        <h2 class="sec">👀 ${isViewer?"みんなの進捗":`${esc(PROGRESS_VIEWER)}の進捗（特別公開中）`}</h2>
+        <div class="rank">${progRows}</div>`:""}`;
     return;
   }
   const rows=MEMBERS.map(n=>{
