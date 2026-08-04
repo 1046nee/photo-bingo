@@ -819,39 +819,36 @@ function openSquare(id, owner=me, cache=myPhotos){
 /* ---------- みんなの状況 / 結果発表 ---------- */
 function renderResults(){
   const revealed=canReveal();
+  // 発表前はみんなの進み具合を一切見せない（発表の予告だけ）
+  if(!revealed){
+    app.innerHTML=`
+      <div class="countdown">結果発表は <b>${fmt(RESULTS_AT)}</b>！<br>
+        それまで、みんなの進み具合はナイショだよ🤫<br>
+        発表になったら、ここで<b>みんなの順位とビンゴ</b>が見られるよ🎉</div>`;
+    return;
+  }
   const rows=MEMBERS.map(n=>{
     const s=calcScore(boards[n]?.filled, boards[n]?.ng);
     return {name:n, ...s};
   });
-  if(revealed) rows.sort((a,b)=>b.score-a.score);
+  rows.sort((a,b)=>b.score-a.score);
 
   app.innerHTML=`
-    ${revealed
-      ?`<h2 class="sec">🎉 結果発表！</h2>`
-      :`<div class="countdown">結果発表は <b>${fmt(RESULTS_AT)}</b>！<br>それまでは各自の進捗（埋めたマス数）だけ見られるよ。おたのしみに！</div>
-        <h2 class="sec">みんなの進捗</h2>`}
+    <h2 class="sec">🎉 結果発表！</h2>
     <div class="rank">
-      ${rows.map((r,i)=>revealed?`
+      ${rows.map((r,i)=>`
         <div class="rankrow clickable" data-n="${r.name}" role="button" tabindex="0">
           <span class="pos">${i===0?'<span class="crown">👑</span>':i+1}</span>
           <span class="nm">${r.name}<div class="detail">${r.filledCount}マス ＋ FREE4点 ＋ ライン${r.lines}本×2点</div></span>
           <span class="score">${r.score}<small>点</small></span>
-        </div>`:`
-        <div class="rankrow locked">
-          <span class="nm">${r.name}
-            <div class="progress"><i style="width:${Math.round(r.filledCount/60*100)}%"></i></div>
-          </span>
-          <span class="detail">${r.filledCount}/60</span>
         </div>`).join("")}
     </div>
-    ${revealed?`<p style="font-size:12px;color:var(--muted);text-align:center;margin-top:10px;">名前をタップするとその人のフォトビンゴが見られます</p>`:""}`;
-  if(revealed){
-    app.querySelectorAll(".rankrow.clickable").forEach(el=>{
-      const open=()=>{ view="player:"+el.dataset.n; render(); };
-      el.onclick=open;
-      el.onkeydown=e=>{ if(e.key==="Enter"){open();} };
-    });
-  }
+    <p style="font-size:12px;color:var(--muted);text-align:center;margin-top:10px;">名前をタップするとその人のフォトビンゴが見られます</p>`;
+  app.querySelectorAll(".rankrow.clickable").forEach(el=>{
+    const open=()=>{ view="player:"+el.dataset.n; render(); };
+    el.onclick=open;
+    el.onkeydown=e=>{ if(e.key==="Enter"){open();} };
+  });
 }
 
 /* ---------- 閲覧用モーダル（発表後のみんなのビンゴで写真とコメントを拡大表示） ---------- */
