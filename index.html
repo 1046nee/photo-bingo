@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<title>旅行フォトビンゴ</title>
+<title>ドパガキ卒業フォトビンゴ</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@500;700;900&display=swap" rel="stylesheet">
 <style>
@@ -20,12 +20,12 @@
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
 body{font-family:'Zen Maru Gothic',sans-serif;background:var(--bg);color:var(--ink);min-height:100vh;}
 button{font-family:inherit;cursor:pointer;}
-.wrap{max-width:760px;margin:0 auto;padding:14px 12px 90px;}
+.wrap{max-width:760px;margin:0 auto;padding:10px 8px 90px;}
 
 /* ---------- header ---------- */
 .hd{text-align:center;padding:10px 0 4px;}
 .hd .deco{font-size:11px;letter-spacing:6px;color:#7F77DD;font-weight:700;}
-.hd h1{font-size:24px;font-weight:900;letter-spacing:3px;color:var(--purple);}
+.hd h1{font-size:21px;font-weight:900;letter-spacing:2px;color:var(--purple);}
 .hd .sub{font-size:11.5px;color:var(--muted);margin-top:2px;}
 
 /* ---------- name select ---------- */
@@ -38,28 +38,28 @@ button{font-family:inherit;cursor:pointer;}
 
 /* ---------- card ---------- */
 .card{background:var(--paper);border:4px solid var(--purple);border-radius:20px;
-  padding:12px 10px;position:relative;margin-top:12px;}
-.card::before{content:"";position:absolute;inset:6px;border:1.5px dashed var(--purple-lt);
+  padding:8px 6px;position:relative;margin-top:12px;}
+.card::before{content:"";position:absolute;inset:4px;border:1.5px dashed var(--purple-lt);
   border-radius:14px;pointer-events:none;}
 .boardscroll{overflow-x:auto;-webkit-overflow-scrolling:touch;}
-.bgrid{display:grid;grid-template-columns:repeat(8,1fr);gap:3px;min-width:560px;}
-.bc{aspect-ratio:1;border-radius:7px;display:flex;align-items:center;justify-content:center;
-  text-align:center;font-size:9.5px;line-height:1.25;padding:2px;overflow:hidden;
+.bgrid{display:grid;grid-template-columns:repeat(8,1fr);gap:2px;}
+.bc{aspect-ratio:1;border-radius:5px;display:flex;align-items:center;justify-content:center;
+  text-align:center;font-size:7px;line-height:1.25;padding:1.5px;overflow:hidden;
   word-break:break-all;border:1px solid rgba(44,44,42,.10);position:relative;font-weight:500;}
 .bc.pp{font-weight:700;}
 .bc .ph{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;}
-.bc .done{position:absolute;right:2px;bottom:2px;width:15px;height:15px;border-radius:50%;
-  background:var(--purple);color:#fff;font-size:10px;display:flex;align-items:center;justify-content:center;}
+.bc .done{position:absolute;right:2px;bottom:2px;width:11px;height:11px;border-radius:50%;
+  background:var(--purple);color:#fff;font-size:8px;display:flex;align-items:center;justify-content:center;}
 .bc.editable{cursor:pointer;}
 .frcell{background:var(--paper);border:1.5px dashed #B4B2A9;}
 .hole{width:80%;height:80%;border-radius:50%;
   background:radial-gradient(circle at 38% 32%,#55504A 0%,#35322D 55%,#1F1D1A 100%);
   display:flex;align-items:center;justify-content:center;
   box-shadow:inset 0 2px 5px rgba(0,0,0,.55),0 1px 0 #fff;}
-.hole span{color:var(--paper);font-weight:900;font-size:9px;letter-spacing:1px;
+.hole span{color:var(--paper);font-weight:900;font-size:7px;letter-spacing:1px;
   transform:rotate(-12deg);}
-.lg{display:flex;flex-wrap:wrap;justify-content:center;gap:5px 12px;margin-top:10px;
-  font-size:10.5px;color:#5F5E5A;}
+.lg{display:flex;flex-wrap:wrap;justify-content:center;gap:4px 9px;margin-top:8px;
+  font-size:9.5px;color:#5F5E5A;}
 .lg span{display:flex;align-items:center;gap:4px;}
 .lg i{width:11px;height:11px;border-radius:3px;display:inline-block;border:1px solid rgba(44,44,42,.12);}
 
@@ -140,6 +140,11 @@ h2.sec{font-size:16px;font-weight:900;color:var(--purple);margin-top:18px;
 .chips{margin-top:4px;}
 .chip{display:inline-block;border-radius:8px;padding:3px 8px;font-size:11px;font-weight:700;
   margin:2px 2px 0 0;border:1px solid rgba(44,44,42,.08);}
+.chip .st{margin-left:4px;padding:1px 5px;border-radius:5px;font-size:9px;font-weight:900;}
+.chip .stw{background:#FFFDF8;color:#8A6A00;border:1px solid #E0C36A;}
+.chip .sto{background:#2F9E63;color:#fff;}
+.chip .stn{background:#C22B2B;color:#fff;}
+.topicnote{font-size:11px;color:var(--muted);margin-top:6px;line-height:1.6;}
 
 /* ---------- score box / history ---------- */
 .scorebox{background:var(--paper);border:2.5px solid var(--purple);border-radius:14px;
@@ -157,15 +162,15 @@ h2.sec{font-size:16px;font-weight:900;color:var(--purple);margin-top:18px;
 /* ---------- NG / OK mark / password ---------- */
 .bc.ngcell{outline:2.5px solid #C22B2B;outline-offset:-2px;}
 .ngmark{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
-  font-size:36px;font-weight:900;color:#C22B2B;background:rgba(255,255,255,.42);
+  font-size:26px;font-weight:900;color:#C22B2B;background:rgba(255,255,255,.42);
   text-shadow:0 1px 0 rgba(255,255,255,.8);pointer-events:none;}
 .bc.okcell{outline:2.5px solid #2F9E63;outline-offset:-2px;}
-.okmark{position:absolute;left:2px;top:2px;width:16px;height:16px;border-radius:50%;
-  background:#2F9E63;color:#fff;font-size:10px;font-weight:900;
+.okmark{position:absolute;left:2px;top:2px;width:12px;height:12px;border-radius:50%;
+  background:#2F9E63;color:#fff;font-size:8px;font-weight:900;
   display:flex;align-items:center;justify-content:center;pointer-events:none;}
 .btn.ok{background:#2F9E63;color:#fff;box-shadow:0 3px 0 #1E6B42;}
 .btn.ok:active{transform:translateY(2px);box-shadow:none;}
-.marklegend{margin-top:8px;text-align:center;font-size:10.5px;color:#5F5E5A;}
+.marklegend{margin-top:6px;text-align:center;font-size:9.5px;color:#5F5E5A;}
 .passinput{display:block;width:170px;margin:14px auto 0;padding:10px;font-size:26px;font-weight:900;
   text-align:center;letter-spacing:8px;border:2.5px solid var(--purple);border-radius:12px;
   font-family:inherit;background:var(--paper);color:var(--ink);}
@@ -174,10 +179,18 @@ h2.sec{font-size:16px;font-weight:900;color:var(--purple);margin-top:18px;
 .loading{text-align:center;color:var(--muted);padding:30px 0;font-size:13px;}
 .hidden{display:none!important;}
 @media (min-width:640px){
-  .bgrid{min-width:0;}
-  .bc{font-size:12px;}
+  .wrap{padding:14px 12px 90px;}
+  .hd h1{font-size:30px;letter-spacing:3px;}
+  .card{padding:12px 10px;}
+  .card::before{inset:6px;}
+  .bgrid{gap:3px;}
+  .bc{font-size:12px;padding:2px;border-radius:7px;}
+  .bc .done{width:15px;height:15px;font-size:10px;}
   .hole span{font-size:12px;}
-  .hd h1{font-size:30px;}
+  .okmark{width:16px;height:16px;font-size:10px;}
+  .ngmark{font-size:36px;}
+  .lg{font-size:10.5px;gap:5px 12px;margin-top:10px;}
+  .marklegend{font-size:10.5px;margin-top:8px;}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important;}}
 </style>
@@ -185,9 +198,9 @@ h2.sec{font-size:16px;font-weight:900;color:var(--purple);margin-top:18px;
 <body>
 <div class="wrap">
   <div class="hd">
-    <div class="deco">★ PHOTO BINGO ★</div>
-    <h1>旅行フォトビンゴ</h1>
-    <div class="sub" id="subline">お題の写真を撮ってマスを埋めよう！｜満点100点</div>
+    <div class="deco">★ ドパガキ治療プログラム ★</div>
+    <h1>ドパガキ卒業フォトビンゴ</h1>
+    <div class="sub" id="subline">スクリーンの時間を減らして、外の世界をじっくり眺めよう｜満点100点</div>
   </div>
   <div id="app"><div class="loading">読み込み中…</div></div>
 </div>
@@ -521,6 +534,8 @@ function renderPass(){
 /* ---------- ルール説明・お題一覧 ---------- */
 function rulesHtml(){
   return `<div class="rules">
+    <h3>🧠 これはドパガキ治療プログラムです</h3>
+    <p style="margin-bottom:10px;">スマホが手放せない、ショート動画を無限に見ちゃう……そんな<b>ドパガキ</b>を卒業するためのビンゴだよ。お題はぜんぶ<b>スクリーンの外の世界</b>にあるもの。画面から顔を上げて、外の世界をじっくり眺めて探してみてね。</p>
     <h3>📖 あそびかた</h3>
     <ol>
       <li>自分の名前を選んで、<b>数字4桁のパスワード</b>を決める（2回目からはパスワードを入れて入るよ）</li>
@@ -532,12 +547,25 @@ function rulesHtml(){
   </div>`;
 }
 
-function topicsHtml(){
-  return `<details class="topics"><summary>📷 写真のお題いちらん（全60コ）</summary>
+function topicsHtml(board){
+  // boardを渡すと、各お題に自分のアップ状況（確認中/OK/要修正）が付く。渡さなければただの一覧
+  const state=id=>{
+    if(!board || !board.filled?.[id]) return null;   // 未アップ（印なし）
+    if(board.ng?.[id]) return "ng";                  // GMに×にされた
+    if(board.ok?.[id]) return "ok";                  // GMに〇をもらった
+    return "wait";                                   // アップ済み・GMチェック待ち
+  };
+  const badge={wait:`<b class="st stw">確認中</b>`, ok:`<b class="st sto">OK</b>`, ng:`<b class="st stn">要修正</b>`};
+  return `<details class="topics"><summary>📷 写真のお題一覧（全60コ）</summary>
+    ${board?`<div class="topicnote">アップしたお題に状態が付くよ。<b>印なし＝まだ撮っていないお題</b>だよ</div>`:""}
     ${Object.entries(CATS).map(([k,c])=>{
       const items=CELLS.filter(x=>x.cat===k);
-      return `<div class="topicgroup"><div class="topichead" style="color:${c.tx};">${c.name}（${items.length}コ）</div>
-        <div class="chips">${items.map(x=>`<span class="chip" style="background:${c.bg};color:${c.tx};">${x.label.replace(/\n/g,"")}</span>`).join("")}</div></div>`;
+      const done=board?items.filter(x=>board.filled?.[x.id]).length:null;
+      return `<div class="topicgroup"><div class="topichead" style="color:${c.tx};">${c.name}（${board?`${done}/${items.length}コ`:`${items.length}コ`}）</div>
+        <div class="chips">${items.map(x=>{
+          const st=state(x.id);
+          return `<span class="chip" style="background:${c.bg};color:${c.tx};">${x.label.replace(/\n/g,"")}${st?badge[st]:""}</span>`;
+        }).join("")}</div></div>`;
     }).join("")}
   </details>`;
 }
@@ -611,7 +639,7 @@ function renderBoard(){
       <div class="scoredetail">マス ${filledCount}点 ＋ FREE 4点 ＋ ライン${lines}本×2点${ngCount?"<br>（×のマスは点数に入らないよ）":""}</div>
     </div>
     ${log.length?`<div class="histbox"><div class="histhead">📋 GMチェックのお知らせ</div>${log.map(histLine).join("")}</div>`:""}
-    ${topicsHtml()}`;
+    ${topicsHtml(b)}`;
   const bs=app.querySelector(".boardscroll"); if(bs&&sc) bs.scrollLeft=sc;
   if(topicsOpen){ const tp=app.querySelector("details.topics"); if(tp) tp.open=true; }
   document.getElementById("switch").onclick=()=>{
