@@ -122,6 +122,47 @@ h2.sec{font-size:16px;font-weight:900;color:var(--purple);margin-top:18px;
   padding:14px;text-align:center;margin-top:12px;font-size:13px;line-height:1.7;}
 .countdown b{font-size:17px;color:var(--purple);}
 
+/* ---------- name colors ---------- */
+.namebtn.boy{border-color:#2E63B0;color:#2E63B0;box-shadow:0 3px 0 rgba(46,99,176,.25);}
+.namebtn.girl{border-color:#C23A3A;color:#C23A3A;box-shadow:0 3px 0 rgba(194,58,58,.25);}
+
+/* ---------- rules / topics ---------- */
+.rules{background:var(--paper);border:2.5px solid var(--purple);border-radius:14px;
+  margin-top:12px;padding:12px 14px;font-size:12.5px;line-height:1.9;}
+.rules h3{color:var(--purple);font-size:14px;margin-bottom:4px;}
+.rules ol{margin-left:20px;}
+.topics{background:var(--paper);border:2.5px solid var(--purple);border-radius:14px;
+  margin-top:12px;padding:10px 14px;}
+.topics summary{font-weight:900;color:var(--purple);cursor:pointer;font-size:13.5px;padding:4px 0;}
+.topicgroup{margin-top:10px;}
+.topichead{font-size:12px;font-weight:900;}
+.chips{margin-top:4px;}
+.chip{display:inline-block;border-radius:8px;padding:3px 8px;font-size:11px;font-weight:700;
+  margin:2px 2px 0 0;border:1px solid rgba(44,44,42,.08);}
+
+/* ---------- score box / history ---------- */
+.scorebox{background:var(--paper);border:2.5px solid var(--purple);border-radius:14px;
+  margin-top:12px;padding:12px 14px;text-align:center;}
+.scorehead{font-size:12px;font-weight:900;color:var(--purple);letter-spacing:2px;}
+.scorenum{font-size:15px;font-weight:700;}
+.scorenum b{font-size:34px;color:var(--purple);}
+.scoredetail{font-size:11.5px;color:var(--muted);margin-top:2px;line-height:1.6;}
+.histbox{background:var(--paper);border:2.5px solid var(--purple);border-radius:14px;
+  margin-top:12px;padding:10px 14px;}
+.histhead{font-size:13px;font-weight:900;color:var(--purple);}
+.histline{font-size:12px;margin-top:6px;line-height:1.6;}
+.histtime{color:var(--muted);font-size:10.5px;margin-right:4px;}
+
+/* ---------- NG mark / password ---------- */
+.bc.ngcell{outline:2.5px solid #C22B2B;outline-offset:-2px;}
+.ngmark{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  font-size:36px;font-weight:900;color:#C22B2B;background:rgba(255,255,255,.42);
+  text-shadow:0 1px 0 rgba(255,255,255,.8);pointer-events:none;}
+.passinput{display:block;width:170px;margin:14px auto 0;padding:10px;font-size:26px;font-weight:900;
+  text-align:center;letter-spacing:8px;border:2.5px solid var(--purple);border-radius:12px;
+  font-family:inherit;background:var(--paper);color:var(--ink);}
+.passinput:focus{outline:3px solid var(--purple-lt);}
+
 .loading{text-align:center;color:var(--muted);padding:30px 0;font-size:13px;}
 .hidden{display:none!important;}
 @media (min-width:640px){
@@ -154,13 +195,17 @@ h2.sec{font-size:16px;font-weight:900;color:var(--purple);margin-top:18px;
 ============================================================ */
 
 // ① メンバー8人の名前（好きに書き換えてください）
-const MEMBERS = ["かんじ","そら","わか","いむた","ゆりな","おん","もえ"];
+const MEMBERS = ["かんじ","そら","わか","いむた","ゆりな","おん","もえ","あずみん"];
 
-// ② アップロード締切（この日時を過ぎると写真の追加・削除ができなくなる）
-const UPLOAD_DEADLINE = new Date("2026-08-12T12:00:00+09:00");
+// ①-2 名前ボタンが青色になるメンバー（男子）。ここに無い名前は赤色（女子）になる
+const MALE_MEMBERS = new Set(["かんじ","そら","わか","いむた"]);
 
-// ③ 結果発表日時（この日時を過ぎると全員のビンゴと点数が見られる）
+// ② 結果発表日時（この日時を過ぎると全員のビンゴと点数が見られる）
 const RESULTS_AT = new Date("2026-08-12T13:00:00+09:00");
+
+// ③ ゲームマスター用パスワード（幹事だけが知っている番号に変えること）
+//    ※ページのソースコードを見ると分かってしまうので、大事なパスワードは使わないこと
+const GM_PASS = "2580";
 
 // ④ Firebaseの設定（セットアップ手順.md 参照。貼り替えるまではこの端末だけのお試しモードで動く）
 const FIREBASE_CONFIG = {
@@ -220,6 +265,15 @@ if (configured) {
         {filled:{[id]: on ? true : fs.deleteField()}, updatedAt: Date.now()},
         {merge:true});
     },
+    async setPass(name, pass){
+      await fs.setDoc(fs.doc(db,"boards",name),{pass, updatedAt: Date.now()},{merge:true});
+    },
+    async setNg(name, id, on, label, type){
+      const entry={id, label, ts:Date.now(), type};
+      await fs.setDoc(fs.doc(db,"boards",name),
+        {ng:{[id]: on ? {ts:entry.ts} : fs.deleteField()}, log: fs.arrayUnion(entry), updatedAt: Date.now()},
+        {merge:true});
+    },
     async savePhoto(name,id,img){ await fs.setDoc(fs.doc(db,"photos",`${name}_${id}`),{img,ts:Date.now()}); },
     async getPhoto(name,id){
       const d = await fs.getDoc(fs.doc(db,"photos",`${name}_${id}`));
@@ -240,16 +294,28 @@ if (configured) {
       if(on) d.boards[name].filled[id]=true; else delete d.boards[name].filled[id];
       d.boards[name].updatedAt=Date.now(); save(d); notify();
     },
+    async setPass(name,pass){
+      const d=load(); d.boards[name]??={filled:{}};
+      d.boards[name].pass=pass; d.boards[name].updatedAt=Date.now(); save(d); notify();
+    },
+    async setNg(name,id,on,label,type){
+      const d=load(); d.boards[name]??={filled:{}};
+      d.boards[name].ng??={}; d.boards[name].log??=[];
+      if(on) d.boards[name].ng[id]={ts:Date.now()}; else delete d.boards[name].ng[id];
+      d.boards[name].log.push({id,label,ts:Date.now(),type});
+      d.boards[name].updatedAt=Date.now(); save(d); notify();
+    },
     async savePhoto(name,id,img){ const d=load(); d.photos[`${name}_${id}`]=img; save(d); },
     async getPhoto(name,id){ return load().photos[`${name}_${id}`]||null; },
     async deletePhoto(name,id){ const d=load(); delete d.photos[`${name}_${id}`]; save(d); notify(); },
   };
 }
 
-/* ---------- 得点計算 ---------- */
-function calcScore(filled){
-  const has = id => FREE_IDS.has(id) || !!filled[id];
-  const n = Object.keys(filled||{}).filter(id=>!FREE_IDS.has(id)).length;
+/* ---------- 得点計算（×にされたマスは埋まっていない扱い） ---------- */
+function calcScore(filled, ng){
+  filled=filled||{}; ng=ng||{};
+  const has = id => FREE_IDS.has(id) || (!!filled[id] && !ng[id]);
+  const n = Object.keys(filled).filter(id=>!FREE_IDS.has(id) && !ng[id]).length;
   let lines=0;
   for(let r=0;r<8;r++){ if([...Array(8)].every((_,c)=>has(`r${r}c${c}`))) lines++; }
   for(let c=0;c<8;c++){ if([...Array(8)].every((_,r)=>has(`r${r}c${c}`))) lines++; }
@@ -281,16 +347,26 @@ function compress(file){
 /* ---------- 状態 ---------- */
 let me = localStorage.getItem("pbingo_name");
 if(me && !MEMBERS.includes(me)) me=null;
+let authPass = localStorage.getItem("pbingo_pass")||"";   // 自分が入力・設定したパスワード
+let pendingName=null;   // パスワード画面で入ろうとしている名前
+let gmOK = false;       // GM_PASS 認証済みか（下で localStorage と照合）
 let boards={};
 let myPhotos={};        // id -> dataURL（自分のぶんだけキャッシュ）
-let view="board";       // board | results | player:名前
+const gmPhotos={};      // "名前_マスID" -> dataURL（GM・閲覧用キャッシュ）
+let view="board";       // board | results | player:名前 | pass | gm | gmplayer:名前
 const app=document.getElementById("app");
 const tabs=document.getElementById("tabs");
 const now=()=>new Date();
-const canEdit=()=>now()<UPLOAD_DEADLINE;
 const revealParam=new URLSearchParams(location.search).get("reveal")==="1";
 const canReveal=()=>now()>=RESULTS_AT || revealParam;
 const fmt=d=>d.toLocaleString("ja-JP",{timeZone:"Asia/Tokyo",month:"numeric",day:"numeric",hour:"2-digit",minute:"2-digit"});
+const esc=s=>String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+gmOK = localStorage.getItem("pbingo_gm")===GM_PASS;
+async function getPhotoCached(name,id){
+  const k=`${name}_${id}`;
+  if(!(k in gmPhotos)) gmPhotos[k]=await store.getPhoto(name,id);
+  return gmPhotos[k];
+}
 
 store.listenBoards(b=>{ boards=b; render(); });
 
@@ -299,11 +375,24 @@ document.getElementById("tab-results").onclick=()=>{ view="results"; render(); }
 
 /* ---------- 描画 ---------- */
 function render(){
-  document.getElementById("tab-board").classList.toggle("on",view==="board");
-  document.getElementById("tab-results").classList.toggle("on",view!=="board");
+  // ログイン中でもパスワードが一致しなくなったら（未設定含む）パスワード画面へ
+  if(me){
+    const p=boards[me]?.pass;
+    if(!p || p!==authPass){ pendingName=me; me=null; view="pass"; }
+  }
+  // パスワード入力中は再描画しない（他の人の更新で入力が消えないように）
+  if(view==="pass" && document.getElementById("pin")) return;
+  if(view==="gm" && !gmOK && document.getElementById("gmpin")) return;
 
-  if(!me){ tabs.classList.add("hidden"); renderNamePick(); return; }
-  tabs.classList.remove("hidden");
+  document.getElementById("tab-board").classList.toggle("on",view==="board");
+  document.getElementById("tab-results").classList.toggle("on",view==="results"||view.startsWith("player:"));
+  const noTabs = !me || view==="pass" || view==="gm" || view.startsWith("gmplayer:");
+  tabs.classList.toggle("hidden",noTabs);
+
+  if(view==="pass") return renderPass();
+  if(view==="gm") return gmOK ? renderGM() : renderGMPass();
+  if(view.startsWith("gmplayer:")) return gmOK ? renderGMBoard(view.slice(9)) : renderGMPass();
+  if(!me) return renderNamePick();
   if(view==="board") renderBoard();
   else if(view==="results") renderResults();
   else if(view.startsWith("player:")) renderPlayerBoard(view.slice(7));
@@ -314,13 +403,110 @@ function renderNamePick(){
     <div class="card" style="padding:20px 16px;">
       <p style="text-align:center;font-weight:700;font-size:15px;">あなたの名前を選んでね</p>
       <div class="namegrid">
-        ${MEMBERS.map(n=>`<button class="namebtn" data-n="${n}">${n}</button>`).join("")}
+        ${MEMBERS.map(n=>`<button class="namebtn ${MALE_MEMBERS.has(n)?"boy":"girl"}" data-n="${n}">${n}</button>`).join("")}
       </div>
+      <p style="text-align:center;font-size:11.5px;color:var(--muted);margin-top:10px;">
+        <span style="color:#2E63B0;font-weight:700;">青＝男子</span> ／ <span style="color:#C23A3A;font-weight:700;">赤＝女子</span>
+      </p>
       ${store.demo?`<div class="notice" style="margin-top:14px;">いまは<b>お試しモード</b>（この端末にだけ保存）。みんなで使うにはFirebase設定を貼り付けてね。</div>`:""}
+    </div>
+    ${rulesHtml()}
+    ${topicsHtml()}
+    <div style="text-align:center;">
+      <button class="btn plain" id="gmlink" style="margin-top:14px;">🔑 ゲームマスターはこちら</button>
     </div>`;
   app.querySelectorAll(".namebtn").forEach(b=>b.onclick=()=>{
-    me=b.dataset.n; localStorage.setItem("pbingo_name",me); loadMyPhotos().then(render); render();
+    const n=b.dataset.n;
+    const p=boards[n]?.pass;
+    if(p && authPass===p){
+      // この端末で前に入力したパスワードが合っていればそのまま入れる
+      me=n; localStorage.setItem("pbingo_name",n);
+      myPhotos={}; view="board";
+      loadMyPhotos().then(render); render();
+    }else{
+      pendingName=n; view="pass"; render();
+    }
   });
+  document.getElementById("gmlink").onclick=()=>{ view="gm"; render(); };
+}
+
+/* ---------- パスワード設定・入力 ---------- */
+function renderPass(){
+  const n=pendingName;
+  if(!n){ view="board"; renderNamePick(); return; }
+  const existing=boards[n]?.pass;
+  app.innerHTML=`
+    <div class="card" style="padding:20px 16px;">
+      <p style="text-align:center;font-weight:900;font-size:17px;color:var(--purple);">${n}</p>
+      ${existing?`
+        <p style="text-align:center;font-weight:700;font-size:14px;margin-top:8px;">パスワード（数字4桁）を入れてね</p>`:`
+        <p style="text-align:center;font-weight:700;font-size:14px;margin-top:8px;">はじめまして！<br>自分だけのパスワード（数字4桁）を決めてね</p>
+        <div class="notice" style="margin-top:10px;">⚠️ このパスワードは<b>ゲームマスターが確認できる</b>よ。ふだん使っているパスワードは使わず、<b>今回かぎりの数字</b>にしてね。</div>`}
+      <input class="passinput" id="pin" type="tel" inputmode="numeric" maxlength="4" placeholder="0000" autocomplete="off">
+      <div class="notice err hidden" id="perr" style="text-align:center;"></div>
+      <div class="mbtns">
+        <button class="btn primary" id="go">${existing?"入る":"このパスワードに決める"}</button>
+        <button class="btn plain" id="backpick">← 名前選択にもどる</button>
+      </div>
+      ${existing?`<p style="font-size:11.5px;color:var(--muted);text-align:center;margin-top:6px;">パスワードを忘れたときは、ゲームマスターに聞いてね（何回でもためせるよ）</p>`:""}
+    </div>`;
+  const pin=document.getElementById("pin");
+  const perr=document.getElementById("perr");
+  const showErr=t=>{ perr.textContent=t; perr.classList.remove("hidden"); };
+  pin.focus();
+  document.getElementById("backpick").onclick=()=>{ pendingName=null; view="board"; render(); };
+  const submit=async()=>{
+    const v=pin.value.trim();
+    if(!/^\d{4}$/.test(v)){ showErr("数字4桁で入力してね"); return; }
+    const cur=boards[n]?.pass;
+    if(cur){
+      if(v!==cur){ showErr("パスワードがちがうよ。もう一度ためしてね"); pin.value=""; pin.focus(); return; }
+    }else{
+      try{ await store.setPass(n,v); }
+      catch(e){ showErr("保存に失敗しました: "+e.message); return; }
+    }
+    authPass=v; localStorage.setItem("pbingo_pass",v);
+    me=n; localStorage.setItem("pbingo_name",n);
+    pendingName=null; myPhotos={}; view="board";
+    loadMyPhotos().then(render); render();
+  };
+  document.getElementById("go").onclick=submit;
+  pin.onkeydown=e=>{ if(e.key==="Enter") submit(); };
+}
+
+/* ---------- ルール説明・お題一覧 ---------- */
+function rulesHtml(){
+  return `<div class="rules">
+    <h3>📖 あそびかた</h3>
+    <ol>
+      <li>自分の名前を選んで、<b>数字4桁のパスワード</b>を決める（2回目からはパスワードを入れて入るよ）</li>
+      <li>ビンゴのマスをタップして、<b>お題に合う写真</b>をアップロード！追加・撮り直し・削除はいつでもOK</li>
+      <li><b>点数</b>：埋めたマス1コ＝1点 ＋ FREE（四隅）＝4点 ＋ そろったライン（たて・よこ・ななめ）1本＝2点で、<b>満点100点</b></li>
+      <li>お題に合っていない写真は、ゲームマスターが<b>×</b>にすることがあるよ。×の間は点数に入らないから、撮り直してね</li>
+      <li><b>結果発表は ${fmt(RESULTS_AT)}</b>！「みんなの状況」タブで順位とみんなの写真が見られるよ🎉</li>
+    </ol>
+  </div>`;
+}
+
+function topicsHtml(){
+  return `<details class="topics"><summary>📷 写真のお題いちらん（全60コ）</summary>
+    ${Object.entries(CATS).map(([k,c])=>{
+      const items=CELLS.filter(x=>x.cat===k);
+      return `<div class="topicgroup"><div class="topichead" style="color:${c.tx};">${c.name}（${items.length}コ）</div>
+        <div class="chips">${items.map(x=>`<span class="chip" style="background:${c.bg};color:${c.tx};">${x.label.replace(/\n/g,"")}</span>`).join("")}</div></div>`;
+    }).join("")}
+  </details>`;
+}
+
+function histLine(e){
+  const msg={
+    ng:`❌ 「${esc(e.label)}」がゲームマスターに<b>×</b>にされたよ。撮り直してね！`,
+    redo:`📷 「${esc(e.label)}」を撮り直したよ`,
+    del:`🗑 「${esc(e.label)}」の写真を削除したよ`,
+    clear:`⭕ 「${esc(e.label)}」の×が取り消されたよ`,
+  }[e.type]||"";
+  if(!msg) return "";
+  return `<div class="histline"><span class="histtime">${fmt(new Date(e.ts))}</span>${msg}</div>`;
 }
 
 async function loadMyPhotos(){
@@ -330,17 +516,19 @@ async function loadMyPhotos(){
   }));
 }
 
-function cellHtml(cell, photos, filled, editable){
+function cellHtml(cell, photos, filled, editable, ng){
   if(cell.cat==="fr"){
     return `<div class="bc frcell"><div class="hole"><span>FREE</span></div></div>`;
   }
   const cat=CATS[cell.cat];
   const done=!!filled[cell.id];
   const ph=photos?.[cell.id];
-  return `<div class="bc ${cell.cat} ${editable?"editable":""}" data-id="${cell.id}"
+  const isNg=done && !!(ng||{})[cell.id];
+  return `<div class="bc ${cell.cat} ${editable?"editable":""} ${isNg?"ngcell":""}" data-id="${cell.id}"
     style="background:${cat.bg};color:${cat.tx};" role="${editable?"button":"img"}" tabindex="${editable?0:-1}">
     ${ph?`<img class="ph" src="${ph}" alt="">`:`<span>${cell.label.replace(/\n/g,"<br>")}</span>`}
     ${done&&!ph?`<span class="done">✓</span>`:""}
+    ${isNg?`<span class="ngmark">×</span>`:""}
   </div>`;
 }
 
@@ -349,39 +537,47 @@ function legendHtml(){
 }
 
 function renderBoard(){
-  const filled=boards[me]?.filled||{};
-  const {filledCount,lines,score}=calcScore(filled);
-  const locked=!canEdit();
+  const b=boards[me]||{};
+  const filled=b.filled||{}, ng=b.ng||{};
+  const {filledCount,lines,score}=calcScore(filled,ng);
+  const ngCount=Object.keys(ng).filter(id=>filled[id]).length;
+  const log=(b.log||[]).slice(-6).reverse();
   app.innerHTML=`
     <div class="statusbar">
       <span class="who">${me}</span>
-      <span class="cnt"><b>${filledCount}</b>/60マス ・ ライン${lines}本 ・ <b>${score}</b>点</span>
+      <span class="cnt"><b>${filledCount}</b>/60マス ・ <b>${score}</b>点</span>
       <button class="smallbtn" id="switch">名前変更</button>
     </div>
-    ${locked
-      ?`<div class="notice">アップロード期間は終了！（締切 ${fmt(UPLOAD_DEADLINE)}）閲覧のみできます。`
-      :`<div class="notice">マスをタップして写真をアップロード！締切は <b>${fmt(UPLOAD_DEADLINE)}</b>。`}
-      ${store.demo?"<br>※お試しモード動作中":""}</div>
+    ${ngCount?`<div class="notice err">❌ ゲームマスターに×にされたマスが<b>${ngCount}コ</b>あるよ！赤い×のマスをタップして撮り直してね（撮り直すまで点数に入らないよ）</div>`:""}
+    <div class="notice">マスをタップして、お題に合う写真をアップロード！追加・撮り直し・削除はいつでもOK。${store.demo?"<br>※お試しモード動作中":""}</div>
     <div class="card"><div class="boardscroll"><div class="bgrid">
-      ${CELLS.map(c=>cellHtml(c,myPhotos,filled,!locked)).join("")}
-    </div></div>${legendHtml()}</div>`;
-  document.getElementById("switch").onclick=()=>{ me=null; localStorage.removeItem("pbingo_name"); render(); };
-  if(!locked){
-    app.querySelectorAll(".bc.editable").forEach(el=>{
-      const open=()=>openSquare(el.dataset.id);
-      el.onclick=open;
-      el.onkeydown=e=>{ if(e.key==="Enter"||e.key===" "){e.preventDefault();open();} };
-    });
-  }
+      ${CELLS.map(c=>cellHtml(c,myPhotos,filled,true,ng)).join("")}
+    </div></div>${legendHtml()}</div>
+    <div class="scorebox">
+      <div class="scorehead">いまの点数</div>
+      <div class="scorenum"><b>${score}</b>点</div>
+      <div class="scoredetail">マス ${filledCount}点 ＋ FREE 4点 ＋ ライン${lines}本×2点${ngCount?"<br>（×のマスは点数に入らないよ）":""}</div>
+    </div>
+    ${log.length?`<div class="histbox"><div class="histhead">📋 GMチェックのお知らせ</div>${log.map(histLine).join("")}</div>`:""}
+    ${topicsHtml()}`;
+  document.getElementById("switch").onclick=()=>{
+    me=null; myPhotos={}; localStorage.removeItem("pbingo_name"); view="board"; render();
+  };
+  app.querySelectorAll(".bc.editable").forEach(el=>{
+    const open=()=>openSquare(el.dataset.id);
+    el.onclick=open;
+    el.onkeydown=e=>{ if(e.key==="Enter"||e.key===" "){e.preventDefault();open();} };
+  });
   loadMyPhotos().then(()=>{ if(view==="board") refreshBoardPhotos(); });
 }
 
 function refreshBoardPhotos(){
-  const filled=boards[me]?.filled||{};
+  const b=boards[me]||{};
+  const filled=b.filled||{}, ng=b.ng||{};
   app.querySelectorAll(".bc[data-id]").forEach(el=>{
     const id=el.dataset.id;
-    if(myPhotos[id] && !el.querySelector("img")){
-      el.innerHTML=`<img class="ph" src="${myPhotos[id]}" alt="">`;
+    if(myPhotos[id] && filled[id] && !el.querySelector("img")){
+      el.innerHTML=`<img class="ph" src="${myPhotos[id]}" alt="">${ng[id]?`<span class="ngmark">×</span>`:""}`;
     } else if(!filled[id] && el.querySelector("img")){
       const cell=CELLS.find(c=>c.id===id);
       el.innerHTML=`<span>${cell.label.replace(/\n/g,"<br>")}</span>`;
@@ -393,14 +589,17 @@ function refreshBoardPhotos(){
 function openSquare(id){
   const cell=CELLS.find(c=>c.id===id);
   const cat=CATS[cell.cat];
+  const label=cell.label.replace(/\n/g,"");
   const filled=boards[me]?.filled||{};
   const has=!!filled[id];
+  const isNg=has && !!boards[me]?.ng?.[id];
   const ov=document.createElement("div");
   ov.className="overlay";
   ov.innerHTML=`
     <div class="modal">
-      <h3>${cell.label.replace(/\n/g,"")}</h3>
+      <h3>${label}</h3>
       <div class="center"><span class="cattag" style="background:${cat.bg};color:${cat.tx};">${cat.name}</span></div>
+      ${isNg?`<div class="notice err" style="margin-top:10px;">❌ この写真はゲームマスターに<b>×</b>にされたよ。お題に合う写真に撮り直してね！（撮り直すまで点数に入らないよ）</div>`:""}
       <img class="preview ${has?"":"hidden"}" id="pv">
       <div class="mbtns">
         <input type="file" accept="image/*" id="file" class="hidden">
@@ -431,7 +630,9 @@ function openSquare(id){
     try{
       await store.savePhoto(me,id,pending);
       await store.setFilled(me,id,true);
+      if(isNg) await store.setNg(me,id,false,label,"redo");   // 撮り直したら×は解除
       myPhotos[id]=pending;
+      delete gmPhotos[`${me}_${id}`];
       ov.remove();
     }catch(err){ alert("保存に失敗しました: "+err.message); $("#save").disabled=false; $("#save").textContent="この写真で保存"; }
   };
@@ -439,7 +640,9 @@ function openSquare(id){
     if(!confirm("この写真を削除する？")) return;
     await store.deletePhoto(me,id);
     await store.setFilled(me,id,false);
+    if(isNg) await store.setNg(me,id,false,label,"del");      // ×のマスの写真を消したら×も解除
     delete myPhotos[id];
+    delete gmPhotos[`${me}_${id}`];
     ov.remove();
   };
   $("#close").onclick=()=>ov.remove();
@@ -450,7 +653,7 @@ function openSquare(id){
 function renderResults(){
   const revealed=canReveal();
   const rows=MEMBERS.map(n=>{
-    const s=calcScore(boards[n]?.filled||{});
+    const s=calcScore(boards[n]?.filled, boards[n]?.ng);
     return {name:n, ...s};
   });
   if(revealed) rows.sort((a,b)=>b.score-a.score);
@@ -485,26 +688,159 @@ function renderResults(){
 }
 
 async function renderPlayerBoard(name){
-  const filled=boards[name]?.filled||{};
-  const {filledCount,lines,score}=calcScore(filled);
+  const b=boards[name]||{};
+  const filled=b.filled||{}, ng=b.ng||{};
+  const {filledCount,lines,score}=calcScore(filled,ng);
   app.innerHTML=`
     <div class="statusbar">
       <span class="who">${name}</span>
       <span class="cnt"><b>${filledCount}</b>マス ・ ライン${lines}本 ・ <b>${score}</b>点</span>
     </div>
     <div class="card"><div class="boardscroll"><div class="bgrid" id="pgrid">
-      ${CELLS.map(c=>cellHtml(c,{},filled,false)).join("")}
+      ${CELLS.map(c=>cellHtml(c,{},filled,false,ng)).join("")}
     </div></div>${legendHtml()}</div>
     <button class="btn ghost backbtn" id="back" style="width:100%;">← 結果にもどる</button>
     <div class="loading" id="pl">写真を読み込み中…</div>`;
   document.getElementById("back").onclick=()=>{ view="results"; render(); };
   const ids=Object.keys(filled);
   for(const id of ids){
-    const img=await store.getPhoto(name,id);
+    const img=await getPhotoCached(name,id);
     const el=app.querySelector(`.bc[data-id="${id}"]`);
-    if(img&&el) el.innerHTML=`<img class="ph" src="${img}" alt="">`;
+    if(img&&el) el.innerHTML=`<img class="ph" src="${img}" alt="">${ng[id]?`<span class="ngmark">×</span>`:""}`;
   }
   const pl=document.getElementById("pl"); if(pl) pl.remove();
+}
+
+/* ---------- ゲームマスター画面 ---------- */
+function renderGMPass(){
+  app.innerHTML=`
+    <div class="card" style="padding:20px 16px;">
+      <p style="text-align:center;font-weight:900;font-size:17px;color:var(--purple);">🔑 ゲームマスター画面</p>
+      <p style="text-align:center;font-size:13px;margin-top:6px;">ゲームマスター用パスワードを入れてね</p>
+      <input class="passinput" id="gmpin" type="tel" inputmode="numeric" maxlength="8" placeholder="****" autocomplete="off">
+      <div class="notice err hidden" id="gerr" style="text-align:center;"></div>
+      <div class="mbtns">
+        <button class="btn primary" id="ggo">入る</button>
+        <button class="btn plain" id="backpick">← 名前選択にもどる</button>
+      </div>
+    </div>`;
+  const pin=document.getElementById("gmpin");
+  pin.focus();
+  document.getElementById("backpick").onclick=()=>{ view="board"; render(); };
+  const submit=()=>{
+    if(pin.value.trim()===GM_PASS){
+      gmOK=true; localStorage.setItem("pbingo_gm",GM_PASS); render();
+    }else{
+      const g=document.getElementById("gerr");
+      g.textContent="パスワードがちがうよ"; g.classList.remove("hidden");
+      pin.value=""; pin.focus();
+    }
+  };
+  document.getElementById("ggo").onclick=submit;
+  pin.onkeydown=e=>{ if(e.key==="Enter") submit(); };
+}
+
+function renderGM(){
+  app.innerHTML=`
+    <h2 class="sec">🔑 ゲームマスター画面</h2>
+    <div class="notice">この画面はメンバーには見せないでね。<b>パスワードを忘れた人</b>がいたら、ここで確認して教えてあげよう。</div>
+    <div class="rank">
+      ${MEMBERS.map(n=>{
+        const b=boards[n]||{};
+        const s=calcScore(b.filled,b.ng);
+        const ngc=Object.keys(b.ng||{}).filter(id=>(b.filled||{})[id]).length;
+        return `<div class="rankrow">
+          <span class="nm">${n}
+            <div class="detail">パスワード: <b>${b.pass?esc(b.pass):"（まだ未設定）"}</b> ・ ${s.filledCount}マス ・ ${s.score}点${ngc?` ・ <span style="color:#C22B2B;font-weight:900;">×${ngc}コ</span>`:""}</div>
+          </span>
+          <button class="smallbtn" data-n="${n}">写真チェック</button>
+        </div>`;
+      }).join("")}
+    </div>
+    <p style="font-size:12px;color:var(--muted);margin-top:10px;line-height:1.7;">「写真チェック」でその人のビンゴを開いて、写真のあるマスをタップすると×にできるよ。×にしたマスは本人の画面に×マークとお知らせが出て、撮り直すまで点数に入らないよ。</p>
+    <div class="mbtns">
+      <button class="btn ghost" id="gmback">← 名前選択にもどる</button>
+      <button class="btn plain" id="gmout">ゲームマスターからログアウト</button>
+    </div>`;
+  app.querySelectorAll(".smallbtn[data-n]").forEach(bt=>bt.onclick=()=>{ view="gmplayer:"+bt.dataset.n; render(); });
+  document.getElementById("gmback").onclick=()=>{ view="board"; render(); };
+  document.getElementById("gmout").onclick=()=>{
+    localStorage.removeItem("pbingo_gm"); gmOK=false; view="board"; render();
+  };
+}
+
+async function renderGMBoard(name){
+  const b=boards[name]||{};
+  const filled=b.filled||{}, ng=b.ng||{};
+  const {filledCount,lines,score}=calcScore(filled,ng);
+  app.innerHTML=`
+    <div class="statusbar">
+      <span class="who">${name}</span>
+      <span class="cnt"><b>${filledCount}</b>マス ・ <b>${score}</b>点</span>
+      <button class="smallbtn" id="gback">← GM画面</button>
+    </div>
+    <div class="notice">写真のあるマスをタップすると、拡大して確認＆×付けができるよ。<button class="smallbtn" id="greload" style="margin-left:6px;">写真を再読込</button></div>
+    <div class="card"><div class="boardscroll"><div class="bgrid">
+      ${CELLS.map(c=>cellHtml(c,{},filled,false,ng)).join("")}
+    </div></div>${legendHtml()}</div>
+    <div class="loading" id="pl">写真を読み込み中…</div>`;
+  document.getElementById("gback").onclick=()=>{ view="gm"; render(); };
+  document.getElementById("greload").onclick=()=>{
+    Object.keys(gmPhotos).forEach(k=>{ if(k.startsWith(name+"_")) delete gmPhotos[k]; });
+    render();
+  };
+  app.querySelectorAll(".bc[data-id]").forEach(el=>{
+    const id=el.dataset.id;
+    if(!filled[id]) return;
+    el.style.cursor="pointer";
+    el.onclick=()=>gmSquare(name,id);
+  });
+  for(const id of Object.keys(filled)){
+    const img=await getPhotoCached(name,id);
+    const el=app.querySelector(`.bc[data-id="${id}"]`);
+    if(img&&el) el.innerHTML=`<img class="ph" src="${img}" alt="">${ng[id]?`<span class="ngmark">×</span>`:""}`;
+  }
+  const pl=document.getElementById("pl"); if(pl) pl.remove();
+}
+
+async function gmSquare(name,id){
+  const cell=CELLS.find(c=>c.id===id);
+  const cat=CATS[cell.cat];
+  const label=cell.label.replace(/\n/g,"");
+  const isNg=!!boards[name]?.ng?.[id];
+  const ov=document.createElement("div");
+  ov.className="overlay";
+  ov.innerHTML=`
+    <div class="modal">
+      <h3>${label}</h3>
+      <div class="center">
+        <span class="cattag" style="background:${cat.bg};color:${cat.tx};">${cat.name}</span>
+        ${isNg?`<span class="cattag" style="background:#FCEBEB;color:#791F1F;">いま×中</span>`:""}
+      </div>
+      <img class="preview" id="gpv">
+      <div class="mbtns">
+        ${isNg
+          ?`<button class="btn ghost" id="unng">⭕ ×を取り消す</button>`
+          :`<button class="btn danger" id="mkng">❌ ×にする（撮り直しさせる）</button>`}
+        <button class="btn plain" id="gclose">閉じる</button>
+      </div>
+    </div>`;
+  document.body.appendChild(ov);
+  const q=s=>ov.querySelector(s);
+  const done=()=>ov.remove();
+  const img=await getPhotoCached(name,id);
+  if(img) q("#gpv").src=img; else q("#gpv").remove();
+  if(q("#mkng")) q("#mkng").onclick=async()=>{
+    if(!confirm(`「${label}」の写真を×にする？\n本人の画面に×マークとお知らせが出て、撮り直すまで点数に入らなくなるよ。`)) return;
+    try{ await store.setNg(name,id,true,label,"ng"); }catch(e){ alert("保存に失敗しました: "+e.message); return; }
+    done();
+  };
+  if(q("#unng")) q("#unng").onclick=async()=>{
+    try{ await store.setNg(name,id,false,label,"clear"); }catch(e){ alert("保存に失敗しました: "+e.message); return; }
+    done();
+  };
+  q("#gclose").onclick=done;
+  ov.onclick=e=>{ if(e.target===ov) done(); };
 }
 </script>
 </body>
