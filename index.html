@@ -30,6 +30,7 @@ button{font-family:inherit;cursor:pointer;}
 
 /* ---------- name select ---------- */
 .namegrid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:18px;}
+.namecol{display:flex;flex-direction:column;gap:10px;}
 .namebtn{background:var(--paper);border:2.5px solid var(--purple);border-radius:16px;
   padding:18px 8px;font-size:17px;font-weight:700;color:var(--purple);
   box-shadow:0 3px 0 rgba(60,52,137,.25);transition:transform .08s;}
@@ -382,6 +383,8 @@ const demoPhotos={};       // お試しボードの写真キャッシュ
 const dispName=n=>n===DEMO_NAME?"🧪 お試し":n;
 let renderGen=0;        // 描画の世代番号（再描画時に古い写真読み込みループを止める）
 let view="board";       // board | results | player:名前 | pass | gm | gmplayer:名前 | gmdemo
+let lastHistKey=null;   // ブラウザ履歴に記録済みの画面（view|名前）。同じ画面の重複pushを防ぐ
+let popNav=false;       // 戻る/進む起因の描画では履歴を積まない（replaceで整合だけ取る）
 const app=document.getElementById("app");
 const tabs=document.getElementById("tabs");
 const now=()=>new Date();
@@ -415,6 +418,14 @@ function render(){
   if(view==="pass" && document.getElementById("pin")) return;
   if(view==="gm" && !gmOK && document.getElementById("gmpin")) return;
 
+  // ブラウザの戻る/進むで画面を行き来できるよう、これから表示する画面を履歴に記録する
+  const histKey=view+"|"+(me||"");
+  if(histKey!==lastHistKey){
+    if(popNav || lastHistKey===null) history.replaceState({view, me},"");
+    else history.pushState({view, me},"");
+    lastHistKey=histKey;
+  }
+
   document.getElementById("tab-board").classList.toggle("on",view==="board");
   document.getElementById("tab-results").classList.toggle("on",view==="results"||view.startsWith("player:"));
   const noTabs = !me || view==="pass" || view==="gm" || view==="gmdemo" || view.startsWith("gmplayer:");
@@ -431,15 +442,16 @@ function render(){
 }
 
 function renderNamePick(){
+  const nameBtn=n=>`<button class="namebtn ${MALE_MEMBERS.has(n)?"boy":"girl"}" data-n="${n}">${n}</button>`;
+  const boys=MEMBERS.filter(n=>MALE_MEMBERS.has(n));
+  const girls=MEMBERS.filter(n=>!MALE_MEMBERS.has(n));
   app.innerHTML=`
     <div class="card" style="padding:20px 16px;">
       <p style="text-align:center;font-weight:700;font-size:15px;">あなたの名前を選んでね</p>
       <div class="namegrid">
-        ${MEMBERS.map(n=>`<button class="namebtn ${MALE_MEMBERS.has(n)?"boy":"girl"}" data-n="${n}">${n}</button>`).join("")}
+        <div class="namecol">${boys.map(nameBtn).join("")}</div>
+        <div class="namecol">${girls.map(nameBtn).join("")}</div>
       </div>
-      <p style="text-align:center;font-size:11.5px;color:var(--muted);margin-top:10px;">
-        <span style="color:#2E63B0;font-weight:700;">青＝男子</span> ／ <span style="color:#C23A3A;font-weight:700;">赤＝女子</span>
-      </p>
       ${store.demo?`<div class="notice" style="margin-top:14px;">いまは<b>お試しモード</b>（この端末にだけ保存）。みんなで使うにはFirebase設定を貼り付けてね。</div>`:""}
     </div>
     ${rulesHtml()}
@@ -984,6 +996,19 @@ async function gmSquare(name,id){
   if(!ov.isConnected) return;
   if(img) q("#gpv").src=img; else q("#gpv").remove();
 }
+
+/* ---------- ブラウザ/スマホの「戻る・進む」対応 ----------
+   render()が画面（view＋ログイン中の名前）を履歴に記録しているので、それを復元して描画する。
+   別人のボードに勝手には入れない（render()のパスワード照合で弾かれてパスワード画面になる） */
+window.addEventListener("popstate",e=>{
+  const s=e.state||{};
+  popNav=true;
+  view=s.view||"board";
+  const m=(s.me && MEMBERS.includes(s.me)) ? s.me : null;
+  if(m!==me){ me=m; myPhotos={}; }
+  render();
+  popNav=false;
+});
 
 /* ---------- 起動：データ購読の開始 ----------
    必ずモジュールの最後に置くこと。お試しモードのlistenBoardsは購読と同時に同期でrender()を
