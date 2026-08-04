@@ -24,9 +24,9 @@ button{font-family:inherit;cursor:pointer;}
 
 /* ---------- header ---------- */
 .hd{text-align:center;margin:-10px -8px 10px;padding:14px 10px 12px;
-  background:linear-gradient(135deg,#4A3DB8 0%,#7C5CE0 45%,#E75695 100%);
+  background:linear-gradient(135deg,#443CA0 0%,#6656C5 55%,#8E5BB8 100%);
   border-radius:0 0 22px 22px;color:#fff;
-  box-shadow:0 3px 10px rgba(60,52,137,.25);}
+  box-shadow:0 2px 8px rgba(60,52,137,.18);}
 .hd .deco{display:inline-block;background:rgba(255,255,255,.16);border:1.5px solid rgba(255,255,255,.5);
   border-radius:999px;padding:3px 12px;font-size:10.5px;letter-spacing:3px;color:#fff;font-weight:700;}
 .hd h1{font-size:21px;font-weight:900;letter-spacing:2px;color:#fff;margin-top:6px;
@@ -125,7 +125,7 @@ button{font-family:inherit;cursor:pointer;}
 .rankrow .score small{font-size:11px;font-weight:700;}
 .rankrow.clickable{cursor:pointer;}
 .progress{height:7px;background:#EDEAE0;border-radius:4px;overflow:hidden;margin-top:4px;}
-.progress i{display:block;height:100%;background:var(--purple-lt);border-radius:4px;}
+.progress i{display:block;height:100%;background:linear-gradient(90deg,#AFA9EC,#D9A0D0);border-radius:4px;}
 .backbtn{margin-top:12px;}
 /* ---------- 集計ビンゴ（全員の回答を重ね合わせた盤面） ---------- */
 .bc.agg0{opacity:.38;}
@@ -141,7 +141,8 @@ button{font-family:inherit;cursor:pointer;}
 .aggnot{margin-top:10px;background:#F1EFE8;border-radius:10px;padding:8px 10px;
   font-size:12px;color:#5F5E5A;line-height:1.6;}
 h2.sec{font-size:16px;font-weight:900;color:var(--purple);margin-top:18px;
-  border-left:5px solid #7F77DD;padding-left:9px;}
+  border-left:5px solid #7F77DD;padding-left:9px;
+  border-image:linear-gradient(180deg,#7C5CE0,#C75BAB) 1;}
 .countdown{background:var(--paper);border:2.5px dashed var(--purple);border-radius:14px;
   padding:14px;text-align:center;margin-top:12px;font-size:13px;line-height:1.7;}
 .countdown b{font-size:17px;color:var(--purple);}
@@ -178,8 +179,27 @@ h2.sec{font-size:16px;font-weight:900;color:var(--purple);margin-top:18px;
   margin-top:12px;padding:12px 14px;text-align:center;}
 .scorehead{font-size:12px;font-weight:900;color:var(--purple);letter-spacing:2px;}
 .scorenum{font-size:15px;font-weight:700;}
-.scorenum b{font-size:34px;color:var(--purple);}
+.scorenum b{font-size:34px;color:var(--purple);
+  background:linear-gradient(135deg,#5B4BC4,#C75BAB);
+  -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;}
 .scoredetail{font-size:11.5px;color:var(--muted);margin-top:2px;line-height:1.6;}
+/* ---------- ステージ（点数で上がる。のめり込み用の仕掛け） ---------- */
+.stageline{margin-top:8px;display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;}
+.stagebadge{display:inline-block;background:linear-gradient(135deg,#5B4BC4,#9B5BC9);color:#fff;
+  border-radius:999px;padding:3px 12px;font-size:11.5px;font-weight:900;letter-spacing:1px;}
+.stagenext{font-size:11px;color:var(--muted);font-weight:700;}
+.stageprog{height:6px;background:#EDEAE0;border-radius:3px;overflow:hidden;margin-top:6px;}
+.stageprog i{display:block;height:100%;border-radius:3px;background:linear-gradient(90deg,#7C5CE0,#C75BAB);}
+.stageburst{position:fixed;inset:0;pointer-events:none;z-index:80;overflow:hidden;}
+.sbcard{position:absolute;left:50%;top:38%;transform:translate(-50%,-50%);
+  background:linear-gradient(135deg,#5B4BC4,#9B5BC9);color:#fff;font-weight:900;
+  font-size:20px;text-align:center;line-height:1.5;padding:18px 26px;border-radius:18px;
+  box-shadow:0 6px 24px rgba(60,52,137,.4);animation:sbpop .5s cubic-bezier(.2,1.6,.4,1);}
+@keyframes sbpop{0%{transform:translate(-50%,-50%) scale(.3);opacity:0;}100%{transform:translate(-50%,-50%) scale(1);opacity:1;}}
+.sbem{position:absolute;top:-30px;font-size:22px;animation:sbfall 2.2s linear forwards;}
+@keyframes sbfall{0%{transform:translateY(0) rotate(0);opacity:1;}100%{transform:translateY(105vh) rotate(340deg);opacity:.7;}}
+@media (prefers-reduced-motion:reduce){.stageburst{display:none;}}
+
 .histbox{background:var(--paper);border:2.5px solid var(--purple);border-radius:14px;
   margin-top:12px;padding:10px 14px;}
 .histhead{font-size:13px;font-weight:900;color:var(--purple);}
@@ -427,6 +447,49 @@ function calcScore(filled, ng){
   return { filledCount:n, lines, score: n + 4 + lines*2 };
 }
 
+/* ---------- ステージ（点数で上がる。10点=2、15点=3、20点=4…最後は100点） ---------- */
+const STAGES=[
+  {min:0,  name:"ステージ1", emoji:"🌱"},
+  {min:10, name:"ステージ2", emoji:"🌿"},
+  {min:15, name:"ステージ3", emoji:"🌳"},
+  {min:20, name:"ステージ4", emoji:"⭐"},
+  {min:30, name:"ステージ5", emoji:"🌟"},
+  {min:45, name:"ステージ6", emoji:"🔥"},
+  {min:60, name:"ステージ7", emoji:"💎"},
+  {min:80, name:"ステージ8", emoji:"👑"},
+  {min:100,name:"ドパガキ完全卒業", emoji:"🏆"},
+];
+function stageOf(score){ let s=0; STAGES.forEach((st,i)=>{ if(score>=st.min) s=i; }); return s; }
+
+// 点数ボックスに出すステージ表示（バッジ＋つぎのステージまでのミニバー）
+function stageHtml(score){
+  const si=stageOf(score), st=STAGES[si], next=STAGES[si+1];
+  const pct=next?Math.round((score-st.min)/(next.min-st.min)*100):100;
+  return `
+    <div class="stageline">
+      <span class="stagebadge">${st.emoji} ${st.name}</span>
+      ${next?`<span class="stagenext">つぎまで あと<b>${next.min-score}</b>点</span>`
+            :`<span class="stagenext">🏆 さいこうのステージ！</span>`}
+    </div>
+    ${next?`<div class="stageprog"><i style="width:${pct}%"></i></div>`:""}`;
+}
+
+// ステージが上がった瞬間のお祝い演出（同じセッション内で前より上がったときだけ）
+const lastStage={};   // 名前 → 最後に表示したステージ番号
+function maybeStageBurst(name,score){
+  const si=stageOf(score);
+  const prev=lastStage[name];
+  lastStage[name]=si;
+  if(prev===undefined || si<=prev) return;   // 初回表示・降格では出さない
+  const st=STAGES[si];
+  const ov=document.createElement("div");
+  ov.className="stageburst";
+  ov.innerHTML=`<div class="sbcard">${st.emoji}<br>${st.name} とうたつ！</div>
+    ${[...Array(10)].map((_,i)=>`<span class="sbem" style="left:${5+Math.round(Math.random()*90)}%;animation-delay:${(Math.random()*0.6).toFixed(2)}s;">${["🎉","✨","💊","⭐"][i%4]}</span>`).join("")}`;
+  document.body.appendChild(ov);
+  setTimeout(()=>ov.remove(), 2600);
+}
+
 /* 完成しているライン上のマスID集合（光る演出用。判定はcalcScoreと同じ＝×のマスは未記入扱い） */
 function litCells(filled, ng){
   filled=filled||{}; ng=ng||{};
@@ -624,7 +687,7 @@ function rulesHtml(){
       <li>写真はゲームマスターがチェックするよ！</li>
       <li><b>${fmt(RESULTS_AT)} に結果発表</b>！みんなの順位とビンゴが見られるようになるよ🎉</li>
     </ol>
-    <div class="prize">🏆 みごと1位でドパガキを卒業した人には、<span style="display:inline-block;"><b>お祝いの賞金</b>をプレゼント！</span><br>😈 ドパガキを卒業できなかった人には<span style="display:inline-block;"><b>罰ゲーム</b>！</span></div>
+    <div class="prize">🏆 1位には<b>お祝いの賞金</b>をプレゼント！<br>😈 ドパガキを卒業できなかった人には<span style="display:inline-block;"><b>罰ゲーム</b>！</span></div>
   </div>`;
 }
 
@@ -729,6 +792,7 @@ function renderBoard(){
       <div class="scorehead">いまの点数</div>
       <div class="scorenum"><b>${score}</b>点</div>
       <div class="scoredetail">マス ${filledCount}点 ＋ FREE 4点 ＋ ライン${lines}本×2点${ngCount?"<br>（×のマスは点数に入らないよ）":""}</div>
+      ${stageHtml(score)}
     </div>
     ${log.length?`<div class="histbox"><div class="histhead">📋 これまでのきろく（アップ・コメント・GMチェック）</div>${log.map(histLine).join("")}</div>`:""}
     ${topicsHtml(b)}`;
@@ -743,6 +807,7 @@ function renderBoard(){
     el.onkeydown=e=>{ if(e.key==="Enter"||e.key===" "){e.preventDefault();open();} };
   });
   loadMyPhotos().then(()=>{ if(view==="board") refreshBoardPhotos(); });
+  maybeStageBurst(me,score);   // ステージが上がっていたらお祝い演出
 }
 
 function refreshBoardPhotos(owner=me, cache=myPhotos){
@@ -1219,6 +1284,7 @@ function renderDemoBoard(){
       <div class="scorehead">いまの点数</div>
       <div class="scorenum"><b>${score}</b>点</div>
       <div class="scoredetail">マス ${filledCount}点 ＋ FREE 4点 ＋ ライン${lines}本×2点</div>
+      ${stageHtml(score)}
     </div>
     ${log.length?`<div class="histbox"><div class="histhead">📋 これまでのきろく（メンバー本人にはこう見えるよ）</div>${log.map(histLine).join("")}</div>`:""}
     ${topicsHtml(b)}`;
@@ -1231,6 +1297,7 @@ function renderDemoBoard(){
     el.onkeydown=e=>{ if(e.key==="Enter"||e.key===" "){e.preventDefault();open();} };
   });
   loadPhotosFor(DEMO_NAME,demoPhotos).then(()=>{ if(view==="gmdemo") refreshBoardPhotos(DEMO_NAME,demoPhotos); });
+  maybeStageBurst(DEMO_NAME,score);   // お試しボードでもステージ演出を体験できる
 }
 
 async function gmSquare(name,id){
