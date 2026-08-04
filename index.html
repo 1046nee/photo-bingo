@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>旅行フォトビンゴ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@500;700;900&display=swap" rel="stylesheet">
+<style>
+:root{
+  --purple:#3C3489; --purple-lt:#AFA9EC; --paper:#FFFDF8; --bg:#EFEBE1;
+  --ink:#2C2C2A; --muted:#888780;
+  --c-it:#EEEDFE; --t-it:#3C3489;
+  --c-ch:#E1F5EE; --t-ch:#085041;
+  --c-pp:#F4C0D1; --t-pp:#72243E;
+  --c-fd:#FAEEDA; --t-fd:#633806;
+  --c-nt:#EAF3DE; --t-nt:#27500A;
+  --c-ot:#F1EFE8; --t-ot:#444441;
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+body{font-family:'Zen Maru Gothic',sans-serif;background:var(--bg);color:var(--ink);min-height:100vh;}
+button{font-family:inherit;cursor:pointer;}
+.wrap{max-width:760px;margin:0 auto;padding:14px 12px 90px;}
+
+/* ---------- header ---------- */
+.hd{text-align:center;padding:10px 0 4px;}
+.hd .deco{font-size:11px;letter-spacing:6px;color:#7F77DD;font-weight:700;}
+.hd h1{font-size:24px;font-weight:900;letter-spacing:3px;color:var(--purple);}
+.hd .sub{font-size:11.5px;color:var(--muted);margin-top:2px;}
+
+/* ---------- name select ---------- */
+.namegrid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:18px;}
+.namebtn{background:var(--paper);border:2.5px solid var(--purple);border-radius:16px;
+  padding:18px 8px;font-size:17px;font-weight:700;color:var(--purple);
+  box-shadow:0 3px 0 rgba(60,52,137,.25);transition:transform .08s;}
+.namebtn:active{transform:translateY(2px);box-shadow:none;}
+
+/* ---------- card ---------- */
+.card{background:var(--paper);border:4px solid var(--purple);border-radius:20px;
+  padding:12px 10px;position:relative;margin-top:12px;}
+.card::before{content:"";position:absolute;inset:6px;border:1.5px dashed var(--purple-lt);
+  border-radius:14px;pointer-events:none;}
+.boardscroll{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+.bgrid{display:grid;grid-template-columns:repeat(8,1fr);gap:3px;min-width:560px;}
+.bc{aspect-ratio:1;border-radius:7px;display:flex;align-items:center;justify-content:center;
+  text-align:center;font-size:9.5px;line-height:1.25;padding:2px;overflow:hidden;
+  word-break:break-all;border:1px solid rgba(44,44,42,.10);position:relative;font-weight:500;}
+.bc.pp{font-weight:700;}
+.bc .ph{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;}
+.bc .done{position:absolute;right:2px;bottom:2px;width:15px;height:15px;border-radius:50%;
+  background:var(--purple);color:#fff;font-size:10px;display:flex;align-items:center;justify-content:center;}
+.bc.editable{cursor:pointer;}
+.frcell{background:var(--paper);border:1.5px dashed #B4B2A9;}
+.hole{width:80%;height:80%;border-radius:50%;
+  background:radial-gradient(circle at 38% 32%,#55504A 0%,#35322D 55%,#1F1D1A 100%);
+  display:flex;align-items:center;justify-content:center;
+  box-shadow:inset 0 2px 5px rgba(0,0,0,.55),0 1px 0 #fff;}
+.hole span{color:var(--paper);font-weight:900;font-size:9px;letter-spacing:1px;
+  transform:rotate(-12deg);}
+.lg{display:flex;flex-wrap:wrap;justify-content:center;gap:5px 12px;margin-top:10px;
+  font-size:10.5px;color:#5F5E5A;}
+.lg span{display:flex;align-items:center;gap:4px;}
+.lg i{width:11px;height:11px;border-radius:3px;display:inline-block;border:1px solid rgba(44,44,42,.12);}
+
+/* ---------- status bar ---------- */
+.statusbar{display:flex;align-items:center;justify-content:space-between;gap:8px;
+  background:var(--paper);border:2.5px solid var(--purple);border-radius:14px;
+  padding:10px 14px;margin-top:12px;}
+.statusbar .who{font-weight:900;font-size:15px;color:var(--purple);}
+.statusbar .cnt{font-size:13px;font-weight:700;}
+.statusbar .cnt b{font-size:18px;color:var(--purple);}
+.smallbtn{background:none;border:1.5px solid var(--muted);border-radius:10px;
+  padding:4px 10px;font-size:11px;color:var(--muted);}
+.notice{margin-top:10px;background:#FAEEDA;color:#633806;border-radius:12px;
+  padding:10px 14px;font-size:12.5px;line-height:1.6;}
+.notice.err{background:#FCEBEB;color:#791F1F;}
+
+/* ---------- tabs ---------- */
+.tabs{position:fixed;left:0;right:0;bottom:0;display:flex;background:var(--paper);
+  border-top:3px solid var(--purple);z-index:20;}
+.tabs button{flex:1;padding:12px 0 max(12px, env(safe-area-inset-bottom));background:none;border:none;
+  font-size:13px;font-weight:700;color:var(--muted);}
+.tabs button.on{color:var(--purple);}
+
+/* ---------- modal ---------- */
+.overlay{position:fixed;inset:0;background:rgba(30,28,45,.55);display:flex;
+  align-items:center;justify-content:center;z-index:50;padding:16px;}
+.modal{background:var(--paper);border:4px solid var(--purple);border-radius:20px;
+  width:100%;max-width:400px;max-height:88vh;overflow-y:auto;padding:18px;}
+.modal h3{font-size:17px;font-weight:900;color:var(--purple);text-align:center;}
+.modal .cattag{display:inline-block;font-size:11px;font-weight:700;border-radius:6px;
+  padding:2px 8px;margin:6px auto 0;}
+.modal .center{text-align:center;}
+.preview{width:100%;border-radius:12px;margin-top:12px;display:block;}
+.mbtns{display:flex;flex-direction:column;gap:8px;margin-top:14px;}
+.btn{border-radius:12px;padding:13px;font-size:15px;font-weight:700;border:none;}
+.btn.primary{background:var(--purple);color:#fff;box-shadow:0 3px 0 #26215C;}
+.btn.primary:active{transform:translateY(2px);box-shadow:none;}
+.btn.ghost{background:none;border:2px solid var(--purple);color:var(--purple);}
+.btn.danger{background:none;border:2px solid #A32D2D;color:#A32D2D;}
+.btn.plain{background:none;border:none;color:var(--muted);font-size:13px;}
+.btn:disabled{opacity:.45;pointer-events:none;}
+
+/* ---------- results ---------- */
+.rank{margin-top:12px;display:flex;flex-direction:column;gap:8px;}
+.rankrow{display:flex;align-items:center;gap:10px;background:var(--paper);
+  border:2.5px solid var(--purple);border-radius:14px;padding:12px 14px;}
+.rankrow.locked{border-color:#D3D1C7;}
+.rankrow .pos{font-size:20px;font-weight:900;color:var(--purple);min-width:34px;text-align:center;}
+.rankrow .nm{font-weight:700;font-size:15px;flex:1;}
+.rankrow .detail{font-size:11px;color:var(--muted);}
+.rankrow .score{font-size:21px;font-weight:900;color:var(--purple);}
+.rankrow .score small{font-size:11px;font-weight:700;}
+.rankrow.clickable{cursor:pointer;}
+.progress{height:7px;background:#EDEAE0;border-radius:4px;overflow:hidden;margin-top:4px;}
+.progress i{display:block;height:100%;background:var(--purple-lt);border-radius:4px;}
+.crown{font-size:18px;}
+.backbtn{margin-top:12px;}
+h2.sec{font-size:16px;font-weight:900;color:var(--purple);margin-top:18px;
+  border-left:5px solid #7F77DD;padding-left:9px;}
+.countdown{background:var(--paper);border:2.5px dashed var(--purple);border-radius:14px;
+  padding:14px;text-align:center;margin-top:12px;font-size:13px;line-height:1.7;}
+.countdown b{font-size:17px;color:var(--purple);}
+
+.loading{text-align:center;color:var(--muted);padding:30px 0;font-size:13px;}
+.hidden{display:none!important;}
+@media (min-width:640px){
+  .bgrid{min-width:0;}
+  .bc{font-size:12px;}
+  .hole span{font-size:12px;}
+  .hd h1{font-size:30px;}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="hd">
+    <div class="deco">★ PHOTO BINGO ★</div>
+    <h1>旅行フォトビンゴ</h1>
+    <div class="sub" id="subline">お題の写真を撮ってマスを埋めよう！｜満点100点</div>
+  </div>
+  <div id="app"><div class="loading">読み込み中…</div></div>
+</div>
+
+<div class="tabs hidden" id="tabs">
+  <button id="tab-board" class="on">マイビンゴ</button>
+  <button id="tab-results">みんなの状況</button>
+</div>
+
+<script type="module">
+/* ============================================================
+   ▼▼▼ 設定：ここだけ書き換えればOK ▼▼▼
+============================================================ */
+
+// ① メンバー8人の名前（好きに書き換えてください）
+const MEMBERS = ["かんじ","そら","わか","いむた","ゆりな","おん","もえ"];
+
+// ② アップロード締切（この日時を過ぎると写真の追加・削除ができなくなる）
+const UPLOAD_DEADLINE = new Date("2026-08-12T12:00:00+09:00");
+
+// ③ 結果発表日時（この日時を過ぎると全員のビンゴと点数が見られる）
+const RESULTS_AT = new Date("2026-08-12T13:00:00+09:00");
+
+// ④ Firebaseの設定（セットアップ手順.md 参照。貼り替えるまではこの端末だけのお試しモードで動く）
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyDB7H1yNy-aFb4fwleAIbPxmhUfiDwo1UA",
+  authDomain: "photo-bingo-4d3c1.firebaseapp.com",
+  projectId: "photo-bingo-4d3c1",
+};
+
+/* ============================================================
+   ▲▲▲ 設定ここまで ▲▲▲
+============================================================ */
+
+const CATS = {
+  it:{name:"アイテム", bg:"var(--c-it)", tx:"var(--t-it)"},
+  ch:{name:"キャラクター", bg:"var(--c-ch)", tx:"var(--t-ch)"},
+  pp:{name:"人物・役職（実物のみOK）", bg:"var(--c-pp)", tx:"var(--t-pp)"},
+  fd:{name:"食べ物・飲み物", bg:"var(--c-fd)", tx:"var(--t-fd)"},
+  nt:{name:"自然・風景", bg:"var(--c-nt)", tx:"var(--t-nt)"},
+  ot:{name:"その他", bg:"var(--c-ot)", tx:"var(--t-ot)"},
+};
+
+const GRID = [
+  [["fr","FREE"],["it","浴衣"],["fd","麻辣担"],["ch","ミャクミャク"],["pp","ホスト"],["nt","打ち上げ花火"],["ot","ボンドロシール"],["fr","FREE"]],
+  [["ch","パペット\nスンスン"],["pp","ビデオ通話中の外国人"],["nt","虹"],["ot","宇宙兄弟46巻"],["fd","白黒ポテチ"],["it","タンクトップ"],["ch","水タイプの\nポケモン"],["pp","リュックの\nおじいちゃん"]],
+  [["fd","ドライカレー"],["it","サッカーの\nユニフォーム"],["ch","たまごっち"],["pp","ジーンズの\nヤリラ"],["nt","ピンク色の空"],["ot","ジグソーパズル"],["fd","かき氷"],["it","ドクロの服"]],
+  [["nt","積乱雲"],["ot","1桁の\nナンバープレート"],["fd","スパイス\nほりにし"],["it","鼻ピアス"],["ch","飛び出し坊や"],["pp","初恋の相手"],["nt","猫"],["ot","ストリート\nピアノ"]],
+  [["ot","昆虫食の自販機"],["nt","シマエナガ"],["pp","高卒"],["ch","ちいかわ"],["it","アームカバー"],["fd","ミックスソフト"],["ot","紙の切符"],["nt","セミの抜け殻"]],
+  [["it","カラコン"],["fd","黄色いアクエリ"],["ot","タイ語表記"],["nt","田んぼ"],["pp","変顔"],["ch","任天堂の\n黄色キャラ"],["it","首かけ扇風機"],["fd","マンジャロ"]],
+  [["pp","半袖の\nサラリーマン"],["ch","いらすとやの\nデザイン"],["it","黒色の傘"],["fd","トルネード\nポテト"],["ot","かさぶた"],["nt","蜃気楼"],["pp","ドレッドヘア"],["ch","リカちゃん人形"]],
+  [["fr","FREE"],["ot","お地蔵さん"],["nt","砂浜のある海"],["pp","ファミマの靴下\n履いてる人"],["ch","サンリオ"],["fd","トリュフ味の\nお菓子"],["it","VRゴーグル"],["fr","FREE"]],
+];
+
+const CELLS = [];
+GRID.forEach((row,r)=>row.forEach(([cat,label],c)=>{
+  CELLS.push({id:`r${r}c${c}`, r, c, cat, label});
+}));
+const FREE_IDS = new Set(CELLS.filter(x=>x.cat==="fr").map(x=>x.id));
+
+/* ---------- ストレージ層（Firebase or お試しローカル） ---------- */
+let store;
+const configured = FIREBASE_CONFIG.projectId && FIREBASE_CONFIG.projectId !== "ここに貼り付け";
+
+if (configured) {
+  const { initializeApp } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js");
+  const fs = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
+  const app = initializeApp(FIREBASE_CONFIG);
+  const db = fs.getFirestore(app);
+  store = {
+    demo:false,
+    listenBoards(cb){
+      return fs.onSnapshot(fs.collection(db,"boards"), snap=>{
+        const out={}; snap.forEach(d=>out[d.id]=d.data()); cb(out);
+      });
+    },
+    async setFilled(name, id, on){
+      await fs.setDoc(fs.doc(db,"boards",name),
+        {filled:{[id]: on ? true : fs.deleteField()}, updatedAt: Date.now()},
+        {merge:true});
+    },
+    async savePhoto(name,id,img){ await fs.setDoc(fs.doc(db,"photos",`${name}_${id}`),{img,ts:Date.now()}); },
+    async getPhoto(name,id){
+      const d = await fs.getDoc(fs.doc(db,"photos",`${name}_${id}`));
+      return d.exists() ? d.data().img : null;
+    },
+    async deletePhoto(name,id){ await fs.deleteDoc(fs.doc(db,"photos",`${name}_${id}`)); },
+  };
+} else {
+  const K="pbingo_demo";
+  const load=()=>JSON.parse(localStorage.getItem(K)||'{"boards":{},"photos":{}}');
+  const save=d=>localStorage.setItem(K,JSON.stringify(d));
+  let notify=()=>{};
+  store = {
+    demo:true,
+    listenBoards(cb){ notify=()=>cb(load().boards); notify(); return ()=>{}; },
+    async setFilled(name,id,on){
+      const d=load(); d.boards[name]??={filled:{}};
+      if(on) d.boards[name].filled[id]=true; else delete d.boards[name].filled[id];
+      d.boards[name].updatedAt=Date.now(); save(d); notify();
+    },
+    async savePhoto(name,id,img){ const d=load(); d.photos[`${name}_${id}`]=img; save(d); },
+    async getPhoto(name,id){ return load().photos[`${name}_${id}`]||null; },
+    async deletePhoto(name,id){ const d=load(); delete d.photos[`${name}_${id}`]; save(d); notify(); },
+  };
+}
+
+/* ---------- 得点計算 ---------- */
+function calcScore(filled){
+  const has = id => FREE_IDS.has(id) || !!filled[id];
+  const n = Object.keys(filled||{}).filter(id=>!FREE_IDS.has(id)).length;
+  let lines=0;
+  for(let r=0;r<8;r++){ if([...Array(8)].every((_,c)=>has(`r${r}c${c}`))) lines++; }
+  for(let c=0;c<8;c++){ if([...Array(8)].every((_,r)=>has(`r${r}c${c}`))) lines++; }
+  if([...Array(8)].every((_,i)=>has(`r${i}c${i}`))) lines++;
+  if([...Array(8)].every((_,i)=>has(`r${i}c${7-i}`))) lines++;
+  return { filledCount:n, lines, score: n + 4 + lines*2 };
+}
+
+/* ---------- 画像圧縮 ---------- */
+function compress(file){
+  return new Promise((res,rej)=>{
+    const img=new Image();
+    img.onload=()=>{
+      const MAX=900;
+      let {width:w,height:h}=img;
+      if(Math.max(w,h)>MAX){ const k=MAX/Math.max(w,h); w=Math.round(w*k); h=Math.round(h*k); }
+      const cv=document.createElement("canvas"); cv.width=w; cv.height=h;
+      cv.getContext("2d").drawImage(img,0,0,w,h);
+      let q=0.72, data=cv.toDataURL("image/jpeg",q);
+      while(data.length>700000 && q>0.35){ q-=0.1; data=cv.toDataURL("image/jpeg",q); }
+      if(data.length>900000) return rej(new Error("画像を小さくできませんでした"));
+      res(data);
+    };
+    img.onerror=()=>rej(new Error("画像を読み込めませんでした"));
+    img.src=URL.createObjectURL(file);
+  });
+}
+
+/* ---------- 状態 ---------- */
+let me = localStorage.getItem("pbingo_name");
+if(me && !MEMBERS.includes(me)) me=null;
+let boards={};
+let myPhotos={};        // id -> dataURL（自分のぶんだけキャッシュ）
+let view="board";       // board | results | player:名前
+const app=document.getElementById("app");
+const tabs=document.getElementById("tabs");
+const now=()=>new Date();
+const canEdit=()=>now()<UPLOAD_DEADLINE;
+const revealParam=new URLSearchParams(location.search).get("reveal")==="1";
+const canReveal=()=>now()>=RESULTS_AT || revealParam;
+const fmt=d=>d.toLocaleString("ja-JP",{timeZone:"Asia/Tokyo",month:"numeric",day:"numeric",hour:"2-digit",minute:"2-digit"});
+
+store.listenBoards(b=>{ boards=b; render(); });
+
+document.getElementById("tab-board").onclick=()=>{ view="board"; render(); };
+document.getElementById("tab-results").onclick=()=>{ view="results"; render(); };
+
+/* ---------- 描画 ---------- */
+function render(){
+  document.getElementById("tab-board").classList.toggle("on",view==="board");
+  document.getElementById("tab-results").classList.toggle("on",view!=="board");
+
+  if(!me){ tabs.classList.add("hidden"); renderNamePick(); return; }
+  tabs.classList.remove("hidden");
+  if(view==="board") renderBoard();
+  else if(view==="results") renderResults();
+  else if(view.startsWith("player:")) renderPlayerBoard(view.slice(7));
+}
+
+function renderNamePick(){
+  app.innerHTML=`
+    <div class="card" style="padding:20px 16px;">
+      <p style="text-align:center;font-weight:700;font-size:15px;">あなたの名前を選んでね</p>
+      <div class="namegrid">
+        ${MEMBERS.map(n=>`<button class="namebtn" data-n="${n}">${n}</button>`).join("")}
+      </div>
+      ${store.demo?`<div class="notice" style="margin-top:14px;">いまは<b>お試しモード</b>（この端末にだけ保存）。みんなで使うにはFirebase設定を貼り付けてね。</div>`:""}
+    </div>`;
+  app.querySelectorAll(".namebtn").forEach(b=>b.onclick=()=>{
+    me=b.dataset.n; localStorage.setItem("pbingo_name",me); loadMyPhotos().then(render); render();
+  });
+}
+
+async function loadMyPhotos(){
+  const filled = boards[me]?.filled || {};
+  await Promise.all(Object.keys(filled).map(async id=>{
+    if(!myPhotos[id]) myPhotos[id]=await store.getPhoto(me,id);
+  }));
+}
+
+function cellHtml(cell, photos, filled, editable){
+  if(cell.cat==="fr"){
+    return `<div class="bc frcell"><div class="hole"><span>FREE</span></div></div>`;
+  }
+  const cat=CATS[cell.cat];
+  const done=!!filled[cell.id];
+  const ph=photos?.[cell.id];
+  return `<div class="bc ${cell.cat} ${editable?"editable":""}" data-id="${cell.id}"
+    style="background:${cat.bg};color:${cat.tx};" role="${editable?"button":"img"}" tabindex="${editable?0:-1}">
+    ${ph?`<img class="ph" src="${ph}" alt="">`:`<span>${cell.label.replace(/\n/g,"<br>")}</span>`}
+    ${done&&!ph?`<span class="done">✓</span>`:""}
+  </div>`;
+}
+
+function legendHtml(){
+  return `<div class="lg">${Object.values(CATS).map(c=>`<span><i style="background:${c.bg};"></i>${c.name}</span>`).join("")}</div>`;
+}
+
+function renderBoard(){
+  const filled=boards[me]?.filled||{};
+  const {filledCount,lines,score}=calcScore(filled);
+  const locked=!canEdit();
+  app.innerHTML=`
+    <div class="statusbar">
+      <span class="who">${me}</span>
+      <span class="cnt"><b>${filledCount}</b>/60マス ・ ライン${lines}本 ・ <b>${score}</b>点</span>
+      <button class="smallbtn" id="switch">名前変更</button>
+    </div>
+    ${locked
+      ?`<div class="notice">アップロード期間は終了！（締切 ${fmt(UPLOAD_DEADLINE)}）閲覧のみできます。`
+      :`<div class="notice">マスをタップして写真をアップロード！締切は <b>${fmt(UPLOAD_DEADLINE)}</b>。`}
+      ${store.demo?"<br>※お試しモード動作中":""}</div>
+    <div class="card"><div class="boardscroll"><div class="bgrid">
+      ${CELLS.map(c=>cellHtml(c,myPhotos,filled,!locked)).join("")}
+    </div></div>${legendHtml()}</div>`;
+  document.getElementById("switch").onclick=()=>{ me=null; localStorage.removeItem("pbingo_name"); render(); };
+  if(!locked){
+    app.querySelectorAll(".bc.editable").forEach(el=>{
+      const open=()=>openSquare(el.dataset.id);
+      el.onclick=open;
+      el.onkeydown=e=>{ if(e.key==="Enter"||e.key===" "){e.preventDefault();open();} };
+    });
+  }
+  loadMyPhotos().then(()=>{ if(view==="board") refreshBoardPhotos(); });
+}
+
+function refreshBoardPhotos(){
+  const filled=boards[me]?.filled||{};
+  app.querySelectorAll(".bc[data-id]").forEach(el=>{
+    const id=el.dataset.id;
+    if(myPhotos[id] && !el.querySelector("img")){
+      el.innerHTML=`<img class="ph" src="${myPhotos[id]}" alt="">`;
+    } else if(!filled[id] && el.querySelector("img")){
+      const cell=CELLS.find(c=>c.id===id);
+      el.innerHTML=`<span>${cell.label.replace(/\n/g,"<br>")}</span>`;
+    }
+  });
+}
+
+/* ---------- マスのモーダル ---------- */
+function openSquare(id){
+  const cell=CELLS.find(c=>c.id===id);
+  const cat=CATS[cell.cat];
+  const filled=boards[me]?.filled||{};
+  const has=!!filled[id];
+  const ov=document.createElement("div");
+  ov.className="overlay";
+  ov.innerHTML=`
+    <div class="modal">
+      <h3>${cell.label.replace(/\n/g,"")}</h3>
+      <div class="center"><span class="cattag" style="background:${cat.bg};color:${cat.tx};">${cat.name}</span></div>
+      <img class="preview ${has?"":"hidden"}" id="pv">
+      <div class="mbtns">
+        <input type="file" accept="image/*" id="file" class="hidden">
+        <button class="btn primary" id="pick">${has?"写真を撮り直す / 選び直す":"写真を撮る / 選ぶ"}</button>
+        <button class="btn primary hidden" id="save">この写真で保存</button>
+        <button class="btn danger ${has?"":"hidden"}" id="del">写真を削除</button>
+        <button class="btn plain" id="close">閉じる</button>
+      </div>
+    </div>`;
+  document.body.appendChild(ov);
+  const $=s=>ov.querySelector(s);
+  let pending=null;
+  if(has){ store.getPhoto(me,id).then(img=>{ if(img){myPhotos[id]=img; $("#pv").src=img;} }); }
+  $("#pick").onclick=()=>$("#file").click();
+  $("#file").onchange=async e=>{
+    const f=e.target.files[0]; if(!f) return;
+    $("#pick").disabled=true; $("#pick").textContent="読み込み中…";
+    try{
+      pending=await compress(f);
+      $("#pv").src=pending; $("#pv").classList.remove("hidden");
+      $("#save").classList.remove("hidden");
+      $("#pick").textContent="別の写真にする";
+    }catch(err){ alert(err.message); }
+    $("#pick").disabled=false;
+  };
+  $("#save").onclick=async()=>{
+    $("#save").disabled=true; $("#save").textContent="保存中…";
+    try{
+      await store.savePhoto(me,id,pending);
+      await store.setFilled(me,id,true);
+      myPhotos[id]=pending;
+      ov.remove();
+    }catch(err){ alert("保存に失敗しました: "+err.message); $("#save").disabled=false; $("#save").textContent="この写真で保存"; }
+  };
+  $("#del").onclick=async()=>{
+    if(!confirm("この写真を削除する？")) return;
+    await store.deletePhoto(me,id);
+    await store.setFilled(me,id,false);
+    delete myPhotos[id];
+    ov.remove();
+  };
+  $("#close").onclick=()=>ov.remove();
+  ov.onclick=e=>{ if(e.target===ov) ov.remove(); };
+}
+
+/* ---------- みんなの状況 / 結果発表 ---------- */
+function renderResults(){
+  const revealed=canReveal();
+  const rows=MEMBERS.map(n=>{
+    const s=calcScore(boards[n]?.filled||{});
+    return {name:n, ...s};
+  });
+  if(revealed) rows.sort((a,b)=>b.score-a.score);
+
+  app.innerHTML=`
+    ${revealed
+      ?`<h2 class="sec">🎉 結果発表！</h2>`
+      :`<div class="countdown">結果発表は <b>${fmt(RESULTS_AT)}</b><br>それまでは各自の進捗（埋めたマス数）だけ見られます</div>
+        <h2 class="sec">みんなの進捗</h2>`}
+    <div class="rank">
+      ${rows.map((r,i)=>revealed?`
+        <div class="rankrow clickable" data-n="${r.name}" role="button" tabindex="0">
+          <span class="pos">${i===0?'<span class="crown">👑</span>':i+1}</span>
+          <span class="nm">${r.name}<div class="detail">${r.filledCount}マス ＋ FREE4点 ＋ ライン${r.lines}本×2点</div></span>
+          <span class="score">${r.score}<small>点</small></span>
+        </div>`:`
+        <div class="rankrow locked">
+          <span class="nm">${r.name}
+            <div class="progress"><i style="width:${Math.round(r.filledCount/60*100)}%"></i></div>
+          </span>
+          <span class="detail">${r.filledCount}/60</span>
+        </div>`).join("")}
+    </div>
+    ${revealed?`<p style="font-size:12px;color:var(--muted);text-align:center;margin-top:10px;">名前をタップするとその人のフォトビンゴが見られます</p>`:""}`;
+  if(revealed){
+    app.querySelectorAll(".rankrow.clickable").forEach(el=>{
+      const open=()=>{ view="player:"+el.dataset.n; render(); };
+      el.onclick=open;
+      el.onkeydown=e=>{ if(e.key==="Enter"){open();} };
+    });
+  }
+}
+
+async function renderPlayerBoard(name){
+  const filled=boards[name]?.filled||{};
+  const {filledCount,lines,score}=calcScore(filled);
+  app.innerHTML=`
+    <div class="statusbar">
+      <span class="who">${name}</span>
+      <span class="cnt"><b>${filledCount}</b>マス ・ ライン${lines}本 ・ <b>${score}</b>点</span>
+    </div>
+    <div class="card"><div class="boardscroll"><div class="bgrid" id="pgrid">
+      ${CELLS.map(c=>cellHtml(c,{},filled,false)).join("")}
+    </div></div>${legendHtml()}</div>
+    <button class="btn ghost backbtn" id="back" style="width:100%;">← 結果にもどる</button>
+    <div class="loading" id="pl">写真を読み込み中…</div>`;
+  document.getElementById("back").onclick=()=>{ view="results"; render(); };
+  const ids=Object.keys(filled);
+  for(const id of ids){
+    const img=await store.getPhoto(name,id);
+    const el=app.querySelector(`.bc[data-id="${id}"]`);
+    if(img&&el) el.innerHTML=`<img class="ph" src="${img}" alt="">`;
+  }
+  const pl=document.getElementById("pl"); if(pl) pl.remove();
+}
+</script>
+</body>
+</html>
