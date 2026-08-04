@@ -677,17 +677,33 @@ function openSquare(id, owner=me, cache=myPhotos){
       ${isNg?`<div class="notice err" style="margin-top:10px;">❌ この写真はゲームマスターに<b>×</b>にされたよ。お題に合う写真に撮り直してね！（撮り直すまで点数に入らないよ）</div>`:""}
       ${isOk?`<div class="notice" style="margin-top:10px;background:#E1F5EE;color:#085041;">⭕ この写真はゲームマスターに<b>〇</b>をもらってるよ！</div>`:""}
       <img class="preview ${has?"":"hidden"}" id="pv">
-      <div class="mbtns">
+      <div class="mbtns" id="btnarea">
         <input type="file" accept="image/*" id="file" class="hidden">
         <button class="btn primary" id="pick">${has?"写真を撮り直す / 選び直す":"写真を撮る / 選ぶ"}</button>
         <button class="btn primary hidden" id="save">この写真で保存</button>
         <button class="btn danger ${has?"":"hidden"}" id="del">写真を削除</button>
         <button class="btn plain" id="close">閉じる</button>
       </div>
+      <div class="mbtns hidden" id="confirmarea"></div>
+      <div class="notice err hidden" id="merr"></div>
     </div>`;
   document.body.appendChild(ov);
   const $=s=>ov.querySelector(s);
   let pending=null;
+  // 確認やエラーはモーダル内に表示する。confirm/alertはLINE内ブラウザ等で
+  // 表示されず「ボタンが反応しない」ように見えるため使わない
+  const showErr=t=>{ const e=$("#merr"); e.textContent=t; e.classList.remove("hidden"); e.scrollIntoView({block:"nearest"}); };
+  const ask=(msg,yesLabel,onYes)=>{
+    $("#btnarea").classList.add("hidden");
+    const ca=$("#confirmarea");
+    ca.innerHTML=`<div class="notice err" style="margin-top:0;">${msg}</div>
+      <button class="btn danger" id="cyes">${yesLabel}</button>
+      <button class="btn ghost" id="cno">やっぱりやめる</button>`;
+    ca.classList.remove("hidden");
+    ca.scrollIntoView({block:"nearest"});
+    $("#cyes").onclick=()=>{ ca.classList.add("hidden"); ca.innerHTML=""; $("#btnarea").classList.remove("hidden"); onYes(); };
+    $("#cno").onclick=()=>{ ca.classList.add("hidden"); ca.innerHTML=""; $("#btnarea").classList.remove("hidden"); };
+  };
   if(has){ store.getPhoto(owner,id).then(img=>{ if(img){cache[id]=img; $("#pv").src=img;} }).catch(()=>{}); }
   $("#pick").onclick=()=>$("#file").click();
   $("#file").onchange=async e=>{
@@ -698,7 +714,8 @@ function openSquare(id, owner=me, cache=myPhotos){
       $("#pv").src=pending; $("#pv").classList.remove("hidden");
       $("#save").classList.remove("hidden");
       $("#pick").textContent="別の写真にする";
-    }catch(err){ alert(err.message); }
+      $("#merr").classList.add("hidden");
+    }catch(err){ showErr(err.message); }
     $("#pick").disabled=false;
   };
   // 判定はモーダルを開いている間にGMが付けることがあるので、ボタンを押した時点の最新値で見る
@@ -706,9 +723,7 @@ function openSquare(id, owner=me, cache=myPhotos){
     const n=!!boards[owner]?.ng?.[id];
     return {ng:n, ok:!n && !!boards[owner]?.ok?.[id], any:!!(boards[owner]?.ng?.[id]||boards[owner]?.ok?.[id])};
   };
-  $("#save").onclick=async()=>{
-    const cur=curJudge();
-    if(cur.ok && !confirm(`この写真はゲームマスターに〇をもらってるよ。\n写真を変えると判定なし（チェック待ち）に戻るけど、変えちゃう？`)) return;
+  const doSave=async()=>{
     $("#save").disabled=true; $("#save").textContent="保存中…";
     try{
       await store.savePhoto(owner,id,pending);
@@ -717,13 +732,16 @@ function openSquare(id, owner=me, cache=myPhotos){
       cache[id]=pending;
       delete gmPhotos[`${owner}_${id}`];
       ov.remove();
-    }catch(err){ alert("保存に失敗しました: "+err.message); $("#save").disabled=false; $("#save").textContent="この写真で保存"; }
+    }catch(err){ showErr("保存に失敗しました: "+err.message); $("#save").disabled=false; $("#save").textContent="この写真で保存"; }
   };
-  $("#del").onclick=async()=>{
-    const cur=curJudge();
-    if(!confirm(cur.ok
-      ?`この写真はゲームマスターに〇をもらってるよ。\n本当に削除する？（〇も消えて、点数も減るよ）`
-      :"この写真を削除する？")) return;
+  $("#save").onclick=()=>{
+    if(curJudge().ok){
+      ask(`この写真はゲームマスターに〇をもらってるよ。写真を変えると判定なし（チェック待ち）に戻るけど、変えちゃう？`,"写真を変えて保存する",doSave);
+      return;
+    }
+    doSave();
+  };
+  const doDel=async()=>{
     try{
       await store.deletePhoto(owner,id);
       await store.setFilled(owner,id,false);
@@ -731,7 +749,12 @@ function openSquare(id, owner=me, cache=myPhotos){
       delete cache[id];
       delete gmPhotos[`${owner}_${id}`];
       ov.remove();
-    }catch(err){ alert("削除に失敗しました: "+err.message); }
+    }catch(err){ showErr("削除に失敗しました: "+err.message); }
+  };
+  $("#del").onclick=()=>{
+    ask(curJudge().ok
+      ?`この写真はゲームマスターに〇をもらってるよ。本当に削除する？（〇も消えて、点数も減るよ）`
+      :`この写真を削除する？`,"🗑 削除する",doDel);
   };
   $("#close").onclick=()=>ov.remove();
   ov.onclick=e=>{ if(e.target===ov) ov.remove(); };
@@ -977,39 +1000,56 @@ async function gmSquare(name,id){
         ${!isOk&&!isNg?`<span class="cattag" style="background:#F1EFE8;color:#444441;">チェック待ち</span>`:""}
       </div>
       <img class="preview" id="gpv">
-      <div class="mbtns">
+      <div class="mbtns" id="gbtnarea">
         ${!isOk?`<button class="btn ok" id="mkok">⭕ 〇にする（問題なし！）</button>`:""}
         ${!isNg?`<button class="btn danger" id="mkng">❌ ×にする（撮り直しさせる）</button>`:""}
         ${isOk||isNg?`<button class="btn ghost" id="unj">判定を取り消す（チェック待ちに戻す）</button>`:""}
         <button class="btn plain" id="gclose">閉じる</button>
       </div>
+      <div class="mbtns hidden" id="gconfirmarea"></div>
+      <div class="notice err hidden" id="gmerr"></div>
     </div>`;
   document.body.appendChild(ov);
   const q=s=>ov.querySelector(s);
   const done=()=>ov.remove();
+  // 確認やエラーはモーダル内に表示する。confirm/alertはLINE内ブラウザ等で
+  // 表示されず「ボタンが反応しない」ように見えるため使わない
+  const showGmErr=t=>{ const e=q("#gmerr"); e.textContent=t; e.classList.remove("hidden"); e.scrollIntoView({block:"nearest"}); };
   const seenTs=boards[name]?.photoTs?.[id] ?? null;   // モーダルを開いた時点の写真の版
   // 判定ボタンを押した瞬間に、本人が削除・撮り直ししていないか確認（誤判定防止）
   const stillSame=()=>{
     const b=boards[name]||{};
-    if(!b.filled?.[id]){ alert("この写真は削除されたみたい。チェック画面を更新するね。"); done(); render(); return false; }
-    if((b.photoTs?.[id] ?? null)!==seenTs){ alert("写真が撮り直されたみたい。もう一度開いて確認してね。"); done(); render(); return false; }
+    let msg=null;
+    if(!b.filled?.[id]) msg="この写真は本人が削除したみたい。この判定はできないよ（閉じてね）";
+    else if((b.photoTs?.[id] ?? null)!==seenTs) msg="写真が撮り直されたみたい。いったん閉じて、開き直して確認してね";
+    if(msg){
+      showGmErr(msg);
+      ["#mkok","#mkng","#unj"].forEach(s=>{ const bt=q(s); if(bt) bt.disabled=true; });
+      q("#gconfirmarea").classList.add("hidden");
+      q("#gbtnarea").classList.remove("hidden");
+      render();   // 背面のチェック画面を最新の状態にしておく
+      return false;
+    }
     return true;
   };
-  if(q("#mkok")) q("#mkok").onclick=async()=>{
+  const judge=async(verdict,type)=>{
+    try{ await store.setJudge(name,id,verdict,label,type); }catch(e){ showGmErr("保存に失敗しました: "+e.message); return; }
+    done();
+  };
+  if(q("#mkok")) q("#mkok").onclick=()=>{ if(stillSame()) judge("ok","ok"); };
+  if(q("#mkng")) q("#mkng").onclick=()=>{
     if(!stillSame()) return;
-    try{ await store.setJudge(name,id,"ok",label,"ok"); }catch(e){ alert("保存に失敗しました: "+e.message); return; }
-    done();
+    q("#gbtnarea").classList.add("hidden");
+    const ca=q("#gconfirmarea");
+    ca.innerHTML=`<div class="notice err" style="margin-top:0;">「${esc(label)}」の写真を×にする？ 本人の画面に×マークとお知らせが出て、撮り直すまで点数に入らなくなるよ。</div>
+      <button class="btn danger" id="ngyes">❌ ×にする</button>
+      <button class="btn ghost" id="ngno">やっぱりやめる</button>`;
+    ca.classList.remove("hidden");
+    ca.scrollIntoView({block:"nearest"});
+    q("#ngyes").onclick=()=>{ if(stillSame()) judge("ng","ng"); };
+    q("#ngno").onclick=()=>{ ca.classList.add("hidden"); ca.innerHTML=""; q("#gbtnarea").classList.remove("hidden"); };
   };
-  if(q("#mkng")) q("#mkng").onclick=async()=>{
-    if(!stillSame()) return;
-    if(!confirm(`「${label}」の写真を×にする？\n本人の画面に×マークとお知らせが出て、撮り直すまで点数に入らなくなるよ。`)) return;
-    try{ await store.setJudge(name,id,"ng",label,"ng"); }catch(e){ alert("保存に失敗しました: "+e.message); return; }
-    done();
-  };
-  if(q("#unj")) q("#unj").onclick=async()=>{
-    try{ await store.setJudge(name,id,null,label,"clear"); }catch(e){ alert("保存に失敗しました: "+e.message); return; }
-    done();
-  };
+  if(q("#unj")) q("#unj").onclick=()=>{ judge(null,"clear"); };
   q("#gclose").onclick=done;
   ov.onclick=e=>{ if(e.target===ov) done(); };
   // 写真はボタン配線のあとで読み込む（読み込み失敗や遅延でモーダルが操作不能にならないように）
