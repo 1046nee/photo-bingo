@@ -517,7 +517,7 @@ function rulesHtml(){
       <li>ビンゴのマスをタップして、<b>お題に合う写真</b>をアップロード！追加・撮り直し・削除はいつでもOK</li>
       <li><b>点数</b>：埋めたマス1コ＝1点 ＋ FREE（四隅）＝4点 ＋ そろったライン（たて・よこ・ななめ）1本＝2点で、<b>満点100点</b></li>
       <li>アップした写真はゲームマスターがチェックするよ。問題なければ<b>〇</b>、お題に合っていなければ<b>×</b>が付くよ。×の間は点数に入らないから、撮り直してね</li>
-      <li><b>結果発表は ${fmt(RESULTS_AT)}</b>！「みんなの状況」タブで順位とみんなの写真が見られるよ🎉</li>
+      <li>結果発表になったら、「みんなの状況」タブで順位とみんなの写真が見られるよ🎉</li>
     </ol>
   </div>`;
 }
@@ -719,7 +719,7 @@ function renderResults(){
   app.innerHTML=`
     ${revealed
       ?`<h2 class="sec">🎉 結果発表！</h2>`
-      :`<div class="countdown">結果発表は <b>${fmt(RESULTS_AT)}</b><br>それまでは各自の進捗（埋めたマス数）だけ見られます</div>
+      :`<div class="countdown">結果発表までおたのしみ！<br>いまは各自の進捗（埋めたマス数）だけ見られます</div>
         <h2 class="sec">みんなの進捗</h2>`}
     <div class="rank">
       ${rows.map((r,i)=>revealed?`
