@@ -93,6 +93,11 @@ button{font-family:inherit;cursor:pointer;}
   padding:2px 8px;margin:6px auto 0;}
 .modal .center{text-align:center;}
 .preview{width:100%;border-radius:12px;margin-top:12px;display:block;}
+.cmtbox{width:100%;margin-top:10px;padding:8px 10px;border:2px solid var(--purple-lt);border-radius:10px;
+  font-family:inherit;font-size:13px;line-height:1.6;background:var(--paper);color:var(--ink);resize:none;}
+.cmtbox:focus{outline:2px solid var(--purple);border-color:var(--purple);}
+.pcomment{margin-top:8px;background:#F1EFE8;border-radius:10px;padding:8px 10px;
+  font-size:12.5px;line-height:1.6;word-break:break-word;}
 .mbtns{display:flex;flex-direction:column;gap:8px;margin-top:14px;}
 .btn{border-radius:12px;padding:13px;font-size:15px;font-weight:700;border:none;}
 .btn.primary{background:var(--purple);color:#fff;box-shadow:0 3px 0 #26215C;}
@@ -301,6 +306,11 @@ if (configured) {
     async setPass(name, pass){
       await fs.setDoc(fs.doc(db,"boards",name),{pass, updatedAt: Date.now()},{merge:true});
     },
+    async setComment(name, id, text){   // 写真のコメント（空・nullで削除）
+      await fs.setDoc(fs.doc(db,"boards",name),
+        {comments:{[id]: text ? text : fs.deleteField()}, updatedAt: Date.now()},
+        {merge:true});
+    },
     async setJudge(name, id, verdict, label, type){   // verdict: "ok" | "ng" | null（チェック待ちに戻す）
       const entry={id, label, ts:Date.now(), type};
       await fs.setDoc(fs.doc(db,"boards",name),
@@ -334,6 +344,12 @@ if (configured) {
     async setPass(name,pass){
       const d=load(); d.boards[name]??={filled:{}};
       d.boards[name].pass=pass; d.boards[name].updatedAt=Date.now(); save(d); notify();
+    },
+    async setComment(name,id,text){
+      const d=load(); d.boards[name]??={filled:{}};
+      d.boards[name].comments??={};
+      if(text) d.boards[name].comments[id]=text; else delete d.boards[name].comments[id];
+      d.boards[name].updatedAt=Date.now(); save(d); notify();
     },
     async setJudge(name,id,verdict,label,type){
       const d=load(); d.boards[name]??={filled:{}};
@@ -646,7 +662,7 @@ function renderBoard(){
       <button class="smallbtn" id="switch">名前変更</button>
     </div>
     ${ngCount?`<div class="notice err">❌ ゲームマスターに×にされたマスが<b>${ngCount}コ</b>あるよ！赤い×のマスをタップして撮り直してね（撮り直すまで点数に入らないよ）</div>`:""}
-    <div class="notice">マスをタップして、お題に合う写真をアップロード！追加・撮り直し・削除はいつでもOK。${store.demo?"<br>※お試しモード動作中":""}</div>
+    <div class="notice">マスをタップして、お題に合う写真をアップロード！💬ひとことコメントも書けるよ。追加・撮り直し・削除はいつでもOK。${store.demo?"<br>※お試しモード動作中":""}</div>
     <div class="card"><div class="boardscroll"><div class="bgrid">
       ${CELLS.map(c=>cellHtml(c,myPhotos,filled,true,ng,ok,lit)).join("")}
     </div></div>${legendHtml()}
@@ -703,10 +719,15 @@ function openSquare(id, owner=me, cache=myPhotos){
       ${isNg?`<div class="notice err" style="margin-top:10px;">❌ この写真はゲームマスターに<b>×</b>にされたよ。お題に合う写真に撮り直してね！（撮り直すまで点数に入らないよ）</div>`:""}
       ${isOk?`<div class="notice" style="margin-top:10px;background:#E1F5EE;color:#085041;">⭕ この写真はゲームマスターに<b>〇</b>をもらってるよ！</div>`:""}
       <img class="preview ${has?"":"hidden"}" id="pv">
+      <div class="${has?"":"hidden"}" id="cmtwrap">
+        <textarea class="cmtbox" id="cmt" maxlength="100" rows="2"
+          placeholder="💬 ひとことコメント・状況説明（なくてもOK・あとから書き直せるよ）">${esc(boards[owner]?.comments?.[id]||"")}</textarea>
+      </div>
       <div class="mbtns" id="btnarea">
         <input type="file" accept="image/*" id="file" class="hidden">
         <button class="btn primary" id="pick">${has?"写真を撮り直す / 選び直す":"写真を撮る / 選ぶ"}</button>
         <button class="btn primary hidden" id="save">この写真で保存</button>
+        <button class="btn ghost ${has?"":"hidden"}" id="savec">💬 コメントを保存</button>
         <button class="btn danger ${has?"":"hidden"}" id="del">写真を削除</button>
         <button class="btn plain" id="close">閉じる</button>
       </div>
@@ -738,7 +759,9 @@ function openSquare(id, owner=me, cache=myPhotos){
     try{
       pending=await compress(f);
       $("#pv").src=pending; $("#pv").classList.remove("hidden");
+      $("#cmtwrap").classList.remove("hidden");
       $("#save").classList.remove("hidden");
+      $("#savec").classList.add("hidden");   // 写真の保存にコメントも含まれるので専用ボタンは隠す
       $("#pick").textContent="別の写真にする";
       $("#merr").classList.add("hidden");
     }catch(err){ showErr(err.message); }
@@ -755,10 +778,16 @@ function openSquare(id, owner=me, cache=myPhotos){
       await store.savePhoto(owner,id,pending);
       await store.setFilled(owner,id,true);
       if(curJudge().any) await store.setJudge(owner,id,null,label,"redo");   // 撮り直したら判定はリセット
+      await store.setComment(owner,id,$("#cmt").value.trim()||null);
       cache[id]=pending;
       delete gmPhotos[`${owner}_${id}`];
       ov.remove();
     }catch(err){ showErr("保存に失敗しました: "+err.message); $("#save").disabled=false; $("#save").textContent="この写真で保存"; }
+  };
+  $("#savec").onclick=async()=>{
+    $("#savec").disabled=true; $("#savec").textContent="保存中…";
+    try{ await store.setComment(owner,id,$("#cmt").value.trim()||null); ov.remove(); }
+    catch(err){ showErr("保存に失敗しました: "+err.message); $("#savec").disabled=false; $("#savec").textContent="💬 コメントを保存"; }
   };
   $("#save").onclick=()=>{
     if(curJudge().ok){
@@ -772,6 +801,7 @@ function openSquare(id, owner=me, cache=myPhotos){
       await store.deletePhoto(owner,id);
       await store.setFilled(owner,id,false);
       if(curJudge().any) await store.setJudge(owner,id,null,label,"del");    // 判定付きの写真を消したら判定も解除
+      await store.setComment(owner,id,null);   // コメントも一緒に消す（次の写真に古い説明が残らないように）
       delete cache[id];
       delete gmPhotos[`${owner}_${id}`];
       ov.remove();
@@ -824,6 +854,32 @@ function renderResults(){
   }
 }
 
+/* ---------- 閲覧用モーダル（発表後のみんなのビンゴで写真とコメントを拡大表示） ---------- */
+function viewSquare(name,id){
+  const cell=CELLS.find(c=>c.id===id);
+  const cat=CATS[cell.cat];
+  const label=cell.label.replace(/\n/g,"");
+  const comment=boards[name]?.comments?.[id]||"";
+  const ov=document.createElement("div");
+  ov.className="overlay";
+  ov.innerHTML=`
+    <div class="modal">
+      <h3>${label}</h3>
+      <div class="center"><span class="cattag" style="background:${cat.bg};color:${cat.tx};">${cat.name}</span></div>
+      <img class="preview" id="vpv">
+      ${comment?`<div class="pcomment">💬 ${esc(comment)}</div>`:""}
+      <div class="mbtns"><button class="btn plain" id="vclose">閉じる</button></div>
+    </div>`;
+  document.body.appendChild(ov);
+  ov.querySelector("#vclose").onclick=()=>ov.remove();
+  ov.onclick=e=>{ if(e.target===ov) ov.remove(); };
+  getPhotoCached(name,id).then(img=>{
+    if(!ov.isConnected) return;
+    const v=ov.querySelector("#vpv");
+    if(img) v.src=img; else v.remove();
+  }).catch(()=>{ const v=ov.querySelector("#vpv"); if(v) v.remove(); });
+}
+
 async function renderPlayerBoard(name){
   const b=boards[name]||{};
   const filled=b.filled||{}, ng=b.ng||{}, ok=b.ok||{};
@@ -839,10 +895,17 @@ async function renderPlayerBoard(name){
     <div class="card"><div class="boardscroll"><div class="bgrid" id="pgrid">
       ${CELLS.map(c=>cellHtml(c,{},filled,false,ng,ok,lit)).join("")}
     </div></div>${legendHtml()}</div>
+    <p style="font-size:11.5px;color:var(--muted);text-align:center;margin-top:8px;">写真のあるマスをタップすると、拡大写真とコメントが見られるよ</p>
     <button class="btn ghost backbtn" id="back" style="width:100%;">← 結果にもどる</button>
     <div class="loading" id="pl">写真を読み込み中…</div>`;
   const bs=app.querySelector(".boardscroll"); if(bs&&sc) bs.scrollLeft=sc;
   document.getElementById("back").onclick=()=>{ view="results"; render(); };
+  app.querySelectorAll(".bc[data-id]").forEach(el=>{
+    const id=el.dataset.id;
+    if(!filled[id]) return;
+    el.style.cursor="pointer";
+    el.onclick=()=>viewSquare(name,id);
+  });
   for(const id of Object.keys(filled)){
     let img=null;
     try{ img=await getPhotoCached(name,id); }catch(e){}   // 1枚失敗しても残りは表示する
@@ -1017,6 +1080,7 @@ async function gmSquare(name,id){
   const label=cell.label.replace(/\n/g,"");
   const isNg=!!boards[name]?.ng?.[id];
   const isOk=!isNg && !!boards[name]?.ok?.[id];
+  const comment=boards[name]?.comments?.[id]||"";
   const ov=document.createElement("div");
   ov.className="overlay";
   ov.innerHTML=`
@@ -1029,6 +1093,7 @@ async function gmSquare(name,id){
         ${!isOk&&!isNg?`<span class="cattag" style="background:#FFF1CC;color:#9A6B00;">チェック待ち</span>`:""}
       </div>
       <img class="preview" id="gpv">
+      ${comment?`<div class="pcomment">💬 本人のコメント: ${esc(comment)}</div>`:""}
       <div class="mbtns" id="gbtnarea">
         ${!isOk?`<button class="btn ok" id="mkok">⭕ 〇にする（問題なし！）</button>`:""}
         ${!isNg?`<button class="btn danger" id="mkng">❌ ×にする（撮り直しさせる）</button>`:""}
