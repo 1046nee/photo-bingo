@@ -400,8 +400,6 @@ async function getPhotoCached(name,id){
   return img;
 }
 
-store.listenBoards(b=>{ boards=b; render(); });
-
 document.getElementById("tab-board").onclick=()=>{ view="board"; render(); };
 document.getElementById("tab-results").onclick=()=>{ view="results"; render(); };
 
@@ -550,7 +548,7 @@ async function loadPhotosFor(owner,cache){
     if(!cache[id]) cache[id]=await store.getPhoto(owner,id);
   }));
 }
-const loadMyPhotos=()=>loadPhotosFor(me,myPhotos);
+function loadMyPhotos(){ return loadPhotosFor(me,myPhotos); }
 
 function cellHtml(cell, photos, filled, editable, ng, ok){
   if(cell.cat==="fr"){
@@ -986,6 +984,11 @@ async function gmSquare(name,id){
   if(!ov.isConnected) return;
   if(img) q("#gpv").src=img; else q("#gpv").remove();
 }
+
+/* ---------- 起動：データ購読の開始 ----------
+   必ずモジュールの最後に置くこと。お試しモードのlistenBoardsは購読と同時に同期でrender()を
+   呼ぶため、これより下にconst/let定義があると未初期化参照(TDZ)で初期化ごと落ちる */
+store.listenBoards(b=>{ boards=b; render(); });
 </script>
 </body>
 </html>
