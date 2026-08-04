@@ -1,0 +1,105 @@
+# CLAUDE.md — 旅行フォトビンゴ
+
+このファイルは Claude Code が作業する際のガイド。**作業前に必ず全部読むこと。**
+
+## これは何
+
+8人グループの旅行イベント用「フォトビンゴ」Webアプリ。**本番運用中**（友人が実際に使用中）。
+
+- 公開URL: https://1046nee.github.io/photo-bingo/
+- リポジトリ: https://github.com/1046nee/photo-bingo （mainブランチ）
+- アプリ本体は `index.html` 1ファイルのみ（ビルドなし・フレームワークなし・素のES Modules）
+- 反映手順は「編集 → commit → push(main)」だけ。GitHub Pagesが1〜2分で自動反映する
+
+## ⚠️ 最重要：既存データ保護ルール
+
+本番運用中のため、以下を破ると本番の写真・データが壊れる／参照できなくなる。
+
+1. **マスIDは位置由来**（`r{行}c{列}`、例 r0c1）。`GRID` の並び替え・お題の位置変更は**禁止**。写真は `photos/{名前}_{マスID}` に紐づいているため、位置を変えると全員の写真がズレる
+2. **`MEMBERS` の名前はFirestoreのドキュメントキー**。表記を1文字でも変えるとその人の `boards/{旧名}` と `photos/{旧名}_*` が孤立する。変更するならFirestore側のデータ移行とセット
+3. **FREEは四隅前提**。動かすなら `FREE_IDS`・`calcScore`（+4の定数）・`GRID` をすべて整合させること
+4. **写真base64は1ドキュメント1MB制限**（Firestoreの仕様＋ルールで `img.size() < 1000000` を強制）。`compress` の上限（90万文字目標・98万でreject）を緩めるならルールも要変更
+5. **無料枠**：読み取り5万/日、egress 10GiB/月。個人ボード閲覧は最大60読み取り/回。全員の写真を一括表示する改修は読み取り数に注意
+6. **修正は必ずお試しモード（後述）で動作確認してからpush**。本番Firestoreに向けたままテストしない
+
+## 技術構成
+
+- フロント: `index.html` 単体。フォント Zen Maru Gothic（Google Fonts）、配色はCSS変数（`:root`、テーマ色 `--purple:#3C3489`）
+- バックエンド: Firebase Cloud Firestore（**Sparkプラン無料枠**・東京）。SDK v10.12.2 を gstatic CDN から dynamic import
+- 写真: Firebase Storageは**不使用**（課金回避）。端末でcanvas圧縮したbase64をFirestoreに直接保存
+- 設定ブロック（index.htmlの「▼▼▼ 設定」コメント区間）:
+  - `MEMBERS` … 8人の名前（ドキュメントキー兼用）
+  - `MALE_MEMBERS` … 名前ボタンが青になるメンバー（それ以外は赤）
+  - `RESULTS_AT` … 結果発表日時（+09:00表記を維持）。**UIには日時を表示しない方針**（仕組みだけ動く）
+  - `GM_PASS` … ゲームマスター用パスワード
+  - `FIREBASE_CONFIG` … 本番接続情報（projectId: photo-bingo-4d3c1）
+
+## Firestoreデータ構造
+
+- `boards/{名前}`:
+  - `filled: {rXcY: true}` … 埋めたマス
+  - `pass: "1234"` … 本人が設定した4桁パスワード（GM画面で閲覧できる仕様）
+  - `ok: {rXcY:{ts}}` / `ng: {rXcY:{ts}}` … GM判定（〇/×）。**相互排他**（`setJudge` が一方を設定し他方を削除）
+  - `log: [{id,label,ts,type}]` … 判定履歴。type: `ok`/`ng`/`clear`(GM取消)/`redo`(本人撮り直し)/`del`(本人削除)
+  - `photoTs: {rXcY: ts}` … 写真の版番号。`setFilled` が書く。キャッシュ無効化とGM誤判定防止に使用
+  - `updatedAt`
+- `photos/{名前}_{マスID}`: `{img: base64文字列, ts}`
+- `boards/_demo` + `photos/_demo_*`: GM練習用お試しボード（`DEMO_NAME`）。MEMBERS外なのでランキング・名前選択に出ない
+- 得点: 埋めマス1点＋FREE4点＋ライン（8行+8列+斜め2=18本）×2点、満点100。**×のマスは未記入扱いで減点**、〇は表示のみ
+
+## Firestoreルール（デプロイ済み。リポジトリ外なのでここに控え）
+
+```
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /boards/{doc} { allow read, write: if true; }
+    match /photos/{doc} {
+      allow read, delete: if true;
+      allow create, update: if request.resource.data.img is string
+                            && request.resource.data.img.size() < 1000000;
+    }
+  }
+}
+```
+
+## 画面フロー
+
+1. 名前選択（男子=青・女子=赤）→ 4桁パスワード（初回は設定＋「GMが確認できるので使い回し禁止」の注意、2回目以降は入力。何度でも試せる）→ マイビンゴ
+2. マイビンゴ: マスをタップ→写真アップ（締切なし・いつでも追加/撮り直し/削除）。表の下に点数ボックス・GMチェック履歴・お題一覧
+3. GM画面: 名前選択画面下の「🔑 ゲームマスターはこちら」→ `GM_PASS` 入力。全員のパスワード閲覧、写真チェック（〇×判定・取消）、お試しボード（写真アップ練習）
+4. 判定の伝わり方: マスに⭕/❌マーク＋履歴＋モーダル内notice。〇写真の削除・変更時は専用confirm。撮り直し・削除で判定はチェック待ちに戻る
+5. みんなの状況: 発表前は進捗バーのみ、`RESULTS_AT` 後はランキング＋名前タップで写真入りボード。`?reveal=1` で発表前プレビュー（幹事用）
+6. localStorage: `pbingo_name` / `pbingo_pass` / `pbingo_gm`（GM認証）/ `pbingo_demo`（お試しモードのデータ）
+
+## ローカル動作確認（必ずこの方法で）
+
+本番データに触らない「お試しモード」で確認する:
+
+1. `index.html` を一時フォルダにコピー
+2. コピー内の `photo-bingo-4d3c1` を `ここに貼り付け` に置換（projectIdがダミーになるとlocalStorage完結のお試しモードで動く）
+3. `npx http-server <一時フォルダ> -p 8090 -c-1` で配信してブラウザで確認（**file:// は不可**）
+4. テストデータ投入: localStorageキー `pbingo_demo` に `{"boards":{...},"photos":{...}}` 形式
+5. **リポジトリ本体の `FIREBASE_CONFIG` は書き換えたままcommitしないこと**
+
+## 実装上の注意（ハマりどころ）
+
+- `render()` は `app.innerHTML` 全置換方式。onSnapshotで誰かの更新のたびに再描画される。以下の配慮が入っているので、新しい画面を足すときも同様にすること:
+  - パスワード入力中（`#pin`/`#gmpin` が存在）は再描画スキップ（入力が消えるため）
+  - `.boardscroll` の横スクロール位置と、お題一覧 `<details>` の開閉状態を退避→復元
+  - `renderGen` 世代トークン: async写真読み込みループは await 後に `gen!==renderGen` で中断（古いループが新DOMを上書きするのを防ぐ）
+- `getPhotoCached` は `boards.photoTs` と照合するキャッシュ。写真を書き換える処理は必ず `setFilled` 経由で `photoTs` を更新すること
+- 判定まわりは「**ボタンを押した時点の boards を再評価**」する設計（`openSquare` の `curJudge` / `gmSquare` の `stillSame`）。モーダルを開いている間に相手（GM⇔本人）が操作するレースが実際に起きるため、開いた時点の値で分岐しないこと
+- モーダルのボタン配線は **写真の await より前** に行う（通信失敗でモーダルが閉じられなくなるのを防ぐ）
+- `compress`: 長辺1400px・品質0.82→0.45のラダー、90万文字以下を目標。`URL.revokeObjectURL` を忘れない
+- XSS: ユーザー由来の文字列（pass等）を innerHTML に入れるときは `esc()` を通す
+
+## 依頼主（ユーザー）の好み
+
+- 平易な言葉＋コピペで済む手順。専門用語は噛み砕いて説明する
+- 破壊的操作（force push・データ削除・公開設定変更）は必ず事前確認を取る
+- 修正フロー: お試しモードで動作確認 → commit → push → 反映を確認して報告。生成・変更したファイルはパスを明示する
+
+## 更新履歴（要約）
+
+- 2026-08-04: 初期版に大型改修。①4桁パスワード制 ②GM画面（パスワード一覧・写真チェック）③〇×判定システム（履歴・点数除外・レース対策）④アップロード締切廃止 ⑤名前ボタン男女色分け ⑥ルール説明＋お題一覧表示 ⑦点数ボックス ⑧画質改善（長辺900→1400px）⑨GMお試しボード ⑩結果発表日時の非表示化
