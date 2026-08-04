@@ -144,7 +144,7 @@ h2.sec{font-size:16px;font-weight:900;color:var(--purple);margin-top:18px;
 .chip{display:inline-block;border-radius:8px;padding:3px 8px;font-size:11px;font-weight:700;
   margin:2px 2px 0 0;border:1px solid rgba(44,44,42,.08);}
 .chip .st{margin-left:4px;padding:1px 5px;border-radius:5px;font-size:9px;font-weight:900;}
-.chip .stw{background:#FFFDF8;color:#8A6A00;border:1px solid #E0C36A;}
+.chip .stw{background:#FFF1CC;color:#9A6B00;border:1px solid #E8C56A;}
 .chip .sto{background:#2F9E63;color:#fff;}
 .chip .stn{background:#C22B2B;color:#fff;}
 .topicnote{font-size:11px;color:var(--muted);margin-top:6px;line-height:1.6;}
@@ -209,7 +209,7 @@ h2.sec{font-size:16px;font-weight:900;color:var(--purple);margin-top:18px;
 <div class="wrap">
   <div class="hd">
     <div class="deco">★ ドパガキ治療プログラム ★</div>
-    <h1>ドパガキ卒業フォトビンゴ</h1>
+    <h1>👦 ドパガキ卒業フォトビンゴ 👧</h1>
     <div class="sub" id="subline">スクリーンの時間を減らして、外の世界をじっくり眺めよう｜満点100点</div>
   </div>
   <div id="app"><div class="loading">読み込み中…</div></div>
@@ -650,7 +650,7 @@ function renderBoard(){
     <div class="card"><div class="boardscroll"><div class="bgrid">
       ${CELLS.map(c=>cellHtml(c,myPhotos,filled,true,ng,ok,lit)).join("")}
     </div></div>${legendHtml()}
-    <div class="marklegend">⭕＝GMチェックOK ・ ❌＝撮り直してね ・ 印なし＝チェック待ち</div></div>
+    <div class="marklegend"><span style="color:#2F9E63;font-weight:700;">⭕＝GMチェックOK</span> ・ <span style="color:#C22B2B;font-weight:700;">❌＝撮り直してね</span> ・ <span style="color:#9A6B00;font-weight:700;">印なし＝チェック待ち</span></div></div>
     <div class="scorebox">
       <div class="scorehead">いまの点数</div>
       <div class="scorenum"><b>${score}</b>点</div>
@@ -898,7 +898,7 @@ function renderGM(){
         return `<div class="rankrow">
           <span class="nm">${n}
             <div class="detail">パスワード: <b>${b.pass?esc(b.pass):"（まだ未設定）"}</b> ・ ${s.score}点<br>
-            写真${raw}枚（<span style="color:#2F9E63;font-weight:900;">〇${okc}</span> ・ <span style="color:#C22B2B;font-weight:900;">×${ngc}</span> ・ 未チェック${pend}）</div>
+            写真${raw}枚（<span style="color:#2F9E63;font-weight:900;">〇${okc}</span> ・ <span style="color:#C22B2B;font-weight:900;">×${ngc}</span> ・ <span style="color:#9A6B00;font-weight:900;">未チェック${pend}</span>）</div>
           </span>
           <button class="smallbtn" data-n="${n}">写真チェック</button>
         </div>`;
@@ -937,14 +937,14 @@ async function renderGMBoard(name){
   app.innerHTML=`
     <div class="statusbar">
       <span class="who">${dispName(name)}</span>
-      <span class="cnt"><b>${score}</b>点 ・ 〇${okc} ×${ngc} 未${Math.max(0,raw-okc-ngc)}</span>
+      <span class="cnt"><b>${score}</b>点 ・ <span style="color:#2F9E63;font-weight:900;">〇${okc}</span> <span style="color:#C22B2B;font-weight:900;">×${ngc}</span> <span style="color:#9A6B00;font-weight:900;">未${Math.max(0,raw-okc-ngc)}</span></span>
       <button class="smallbtn" id="gback">← GM画面</button>
     </div>
     <div class="notice">写真のあるマスをタップすると、拡大して〇×の判定ができるよ。<button class="smallbtn" id="greload" style="margin-left:6px;">写真を再読込</button></div>
     <div class="card"><div class="boardscroll"><div class="bgrid">
       ${CELLS.map(c=>cellHtml(c,{},filled,false,ng,ok,lit)).join("")}
     </div></div>${legendHtml()}
-    <div class="marklegend">⭕＝チェックOK ・ ❌＝要撮り直し ・ 印なし＝チェック待ち</div></div>
+    <div class="marklegend"><span style="color:#2F9E63;font-weight:700;">⭕＝チェックOK</span> ・ <span style="color:#C22B2B;font-weight:700;">❌＝要撮り直し</span> ・ <span style="color:#9A6B00;font-weight:700;">印なし＝チェック待ち</span></div></div>
     ${topicsHtml(b)}
     <div class="loading" id="pl">写真を読み込み中…</div>`;
   const bs=app.querySelector(".boardscroll"); if(bs&&sc) bs.scrollLeft=sc;
@@ -992,7 +992,7 @@ function renderDemoBoard(){
     <div class="card"><div class="boardscroll"><div class="bgrid">
       ${CELLS.map(c=>cellHtml(c,demoPhotos,filled,true,ng,ok,lit)).join("")}
     </div></div>${legendHtml()}
-    <div class="marklegend">⭕＝GMチェックOK ・ ❌＝撮り直してね ・ 印なし＝チェック待ち</div></div>
+    <div class="marklegend"><span style="color:#2F9E63;font-weight:700;">⭕＝GMチェックOK</span> ・ <span style="color:#C22B2B;font-weight:700;">❌＝撮り直してね</span> ・ <span style="color:#9A6B00;font-weight:700;">印なし＝チェック待ち</span></div></div>
     <div class="scorebox">
       <div class="scorehead">いまの点数</div>
       <div class="scorenum"><b>${score}</b>点</div>
@@ -1026,7 +1026,7 @@ async function gmSquare(name,id){
         <span class="cattag" style="background:${cat.bg};color:${cat.tx};">${cat.name}</span>
         ${isOk?`<span class="cattag" style="background:#E1F5EE;color:#085041;">判定：〇</span>`:""}
         ${isNg?`<span class="cattag" style="background:#FCEBEB;color:#791F1F;">判定：×</span>`:""}
-        ${!isOk&&!isNg?`<span class="cattag" style="background:#F1EFE8;color:#444441;">チェック待ち</span>`:""}
+        ${!isOk&&!isNg?`<span class="cattag" style="background:#FFF1CC;color:#9A6B00;">チェック待ち</span>`:""}
       </div>
       <img class="preview" id="gpv">
       <div class="mbtns" id="gbtnarea">
