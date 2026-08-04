@@ -23,10 +23,15 @@ button{font-family:inherit;cursor:pointer;}
 .wrap{max-width:760px;margin:0 auto;padding:10px 8px 90px;}
 
 /* ---------- header ---------- */
-.hd{text-align:center;padding:10px 0 4px;}
-.hd .deco{font-size:11px;letter-spacing:6px;color:#7F77DD;font-weight:700;}
-.hd h1{font-size:21px;font-weight:900;letter-spacing:2px;color:var(--purple);}
-.hd .sub{font-size:11.5px;color:var(--muted);margin-top:2px;}
+.hd{text-align:center;margin:-10px -8px 10px;padding:14px 10px 12px;
+  background:linear-gradient(135deg,#4A3DB8 0%,#7C5CE0 45%,#E75695 100%);
+  border-radius:0 0 22px 22px;color:#fff;
+  box-shadow:0 3px 10px rgba(60,52,137,.25);}
+.hd .deco{display:inline-block;background:rgba(255,255,255,.16);border:1.5px solid rgba(255,255,255,.5);
+  border-radius:999px;padding:3px 12px;font-size:10.5px;letter-spacing:3px;color:#fff;font-weight:700;}
+.hd h1{font-size:21px;font-weight:900;letter-spacing:2px;color:#fff;margin-top:6px;
+  text-shadow:0 2px 0 rgba(0,0,0,.12);}
+.hd .sub{font-size:11.5px;color:rgba(255,255,255,.92);margin-top:3px;}
 
 /* ---------- name select ---------- */
 .namegrid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:18px;}
@@ -209,6 +214,7 @@ h2.sec{font-size:16px;font-weight:900;color:var(--purple);margin-top:18px;
 .hidden{display:none!important;}
 @media (min-width:640px){
   .wrap{padding:14px 12px 90px;}
+  .hd{margin:-14px -12px 12px;padding:20px 12px 16px;border-radius:0 0 26px 26px;}
   .hd h1{font-size:30px;letter-spacing:3px;}
   .card{padding:12px 10px;}
   .card::before{inset:6px;}
@@ -228,7 +234,7 @@ h2.sec{font-size:16px;font-weight:900;color:var(--purple);margin-top:18px;
 <body>
 <div class="wrap">
   <div class="hd">
-    <div class="deco">★ ドパガキ治療プログラム ★</div>
+    <div class="deco">💊 ドパガキ治療プログラム 💊</div>
     <h1>👦 ドパガキ卒業フォトビンゴ 👧</h1>
     <div class="sub" id="subline">スクリーンの時間を減らして、外の世界をじっくり眺めよう｜満点100点</div>
   </div>
@@ -262,9 +268,9 @@ const DEVIL_EXEMPT = "あずみん";
 // ② 結果発表日時（この日時を過ぎると全員のビンゴと点数が見られる。UIの発表日時表示もここから出る）
 const RESULTS_AT = new Date("2026-08-12T12:00:00+09:00");
 
-// ③ ゲームマスター用パスワード（数字8桁。幹事だけが知っている番号に変えること）
+// ③ ゲームマスター用パスワード（数字11桁。幹事だけが知っている番号に変えること）
 //    ※ページのソースコードを見ると分かってしまうので、大事なパスワードは使わないこと
-const GM_PASS = "25802580";
+const GM_PASS = "09042757073";
 
 // ④ Firebaseの設定（セットアップ手順.md 参照。貼り替えるまではこの端末だけのお試しモードで動く）
 const FIREBASE_CONFIG = {
@@ -339,6 +345,10 @@ if (configured) {
         {gmComments:{[id]: text ? text : fs.deleteField()}, updatedAt: Date.now()},
         {merge:true});
     },
+    async addLog(name, entry){   // 履歴を1件追記（アップ・コメント等の記録用）
+      await fs.setDoc(fs.doc(db,"boards",name),
+        {log: fs.arrayUnion(entry), updatedAt: Date.now()},{merge:true});
+    },
     async setJudge(name, id, verdict, label, type){   // verdict: "ok" | "ng" | null（チェック待ちに戻す）
       const entry={id, label, ts:Date.now(), type};
       await fs.setDoc(fs.doc(db,"boards",name),
@@ -383,6 +393,11 @@ if (configured) {
       const d=load(); d.boards[name]??={filled:{}};
       d.boards[name].gmComments??={};
       if(text) d.boards[name].gmComments[id]=text; else delete d.boards[name].gmComments[id];
+      d.boards[name].updatedAt=Date.now(); save(d); notify();
+    },
+    async addLog(name,entry){
+      const d=load(); d.boards[name]??={filled:{}};
+      d.boards[name].log??=[]; d.boards[name].log.push(entry);
       d.boards[name].updatedAt=Date.now(); save(d); notify();
     },
     async setJudge(name,id,verdict,label,type){
@@ -604,12 +619,12 @@ function rulesHtml(){
     <h3>📖 あそびかた</h3>
     <ol>
       <li>名前を選んでパスワードを入れる</li>
-      <li>ビンゴのマスにお題に合う写真をアップロード！</li>
+      <li>ビンゴのマスにお題に合う写真をアップロード！（💬ひとことコメントも書けるよ）</li>
       <li>ビンゴを埋めて目指せ<b>100点</b>！</li>
       <li>写真はゲームマスターがチェックするよ！</li>
       <li><b>${fmt(RESULTS_AT)} に結果発表</b>！みんなの順位とビンゴが見られるようになるよ🎉</li>
     </ol>
-    <div class="prize">🏆 <b>1位には賞金</b>！<br>😈 ドパガキを卒業できなかった人には<span style="display:inline-block;"><b>罰ゲーム</b>！</span></div>
+    <div class="prize">🏆 みごと1位でドパガキを卒業した人には、<span style="display:inline-block;"><b>お祝いの賞金</b>をプレゼント！</span><br>😈 ドパガキを卒業できなかった人には<span style="display:inline-block;"><b>罰ゲーム</b>！</span></div>
   </div>`;
 }
 
@@ -641,12 +656,17 @@ function topicsHtml(board){
 }
 
 function histLine(e){
+  const t=e.text?`（💬 ${esc(e.text)}）`:"";   // コメント内容も履歴に残す
   const msg={
     ok:`⭕ 「${esc(e.label)}」がゲームマスターに<b>〇</b>をもらったよ！`,
     ng:`❌ 「${esc(e.label)}」がゲームマスターに<b>×</b>にされたよ。撮り直してね！`,
-    redo:`📷 「${esc(e.label)}」を撮り直したよ（チェック待ちに戻ったよ）`,
+    redo:`「${esc(e.label)}」の判定がチェック待ちに戻ったよ`,
     del:`🗑 「${esc(e.label)}」の写真を削除したよ`,
     clear:`「${esc(e.label)}」の判定が取り消されたよ（チェック待ちに戻ったよ）`,
+    up:`📷 「${esc(e.label)}」に写真をアップしたよ${t}`,
+    reup:`📷 「${esc(e.label)}」の写真を撮り直したよ${t}`,
+    cmt:`💬 「${esc(e.label)}」のコメントを更新したよ${t}`,
+    gmcmt:`🔑 「${esc(e.label)}」にゲームマスターからコメントが付いたよ${t}`,
   }[e.type]||"";
   if(!msg) return "";
   return `<div class="histline"><span class="histtime">${fmt(new Date(e.ts))}</span>${msg}</div>`;
@@ -710,7 +730,7 @@ function renderBoard(){
       <div class="scorenum"><b>${score}</b>点</div>
       <div class="scoredetail">マス ${filledCount}点 ＋ FREE 4点 ＋ ライン${lines}本×2点${ngCount?"<br>（×のマスは点数に入らないよ）":""}</div>
     </div>
-    ${log.length?`<div class="histbox"><div class="histhead">📋 GMチェックのお知らせ</div>${log.map(histLine).join("")}</div>`:""}
+    ${log.length?`<div class="histbox"><div class="histhead">📋 これまでのきろく（アップ・コメント・GMチェック）</div>${log.map(histLine).join("")}</div>`:""}
     ${topicsHtml(b)}`;
   const bs=app.querySelector(".boardscroll"); if(bs&&sc) bs.scrollLeft=sc;
   if(topicsOpen){ const tp=app.querySelector("details.topics"); if(tp) tp.open=true; }
@@ -759,6 +779,7 @@ function openSquare(id, owner=me, cache=myPhotos){
       ${isOk?`<div class="notice" style="margin-top:10px;background:#E1F5EE;color:#085041;">⭕ この写真はゲームマスターに<b>〇</b>をもらってるよ！</div>`:""}
       <img class="preview ${has?"":"hidden"}" id="pv">
       ${gmComment?`<div class="pcomment gm">🔑 GMからのコメント: ${esc(gmComment)}</div>`:""}
+      ${has?"":`<p id="cmthint" style="text-align:center;font-size:12px;color:var(--muted);margin-top:10px;">📷 写真を選ぶと、💬ひとことコメントも一緒に書けるよ</p>`}
       <div class="${has?"":"hidden"}" id="cmtwrap">
         <textarea class="cmtbox" id="cmt" maxlength="100" rows="2"
           placeholder="💬 ひとことコメント・状況説明（なくてもOK・あとから書き直せるよ）">${esc(boards[owner]?.comments?.[id]||"")}</textarea>
@@ -799,6 +820,7 @@ function openSquare(id, owner=me, cache=myPhotos){
     try{
       pending=await compress(f);
       $("#pv").src=pending; $("#pv").classList.remove("hidden");
+      const hint=$("#cmthint"); if(hint) hint.remove();
       $("#cmtwrap").classList.remove("hidden");
       $("#save").classList.remove("hidden");
       $("#savec").classList.add("hidden");   // 写真の保存にコメントも含まれるので専用ボタンは隠す
@@ -815,11 +837,13 @@ function openSquare(id, owner=me, cache=myPhotos){
   const doSave=async()=>{
     $("#save").disabled=true; $("#save").textContent="保存中…";
     try{
+      const cmtText=$("#cmt").value.trim();
       await store.savePhoto(owner,id,pending);
       await store.setFilled(owner,id,true);
       if(curJudge().any) await store.setJudge(owner,id,null,label,"redo");   // 撮り直したら判定はリセット
       if(boards[owner]?.gmComments?.[id]) await store.setGmComment(owner,id,null);   // GMコメントは前の写真宛てなので消す
-      await store.setComment(owner,id,$("#cmt").value.trim()||null);
+      await store.setComment(owner,id,cmtText||null);
+      await store.addLog(owner,{id,label,ts:Date.now(),type:has?"reup":"up",text:cmtText});   // アップの記録（コメント内容つき）
       cache[id]=pending;
       delete gmPhotos[`${owner}_${id}`];
       ov.remove();
@@ -827,7 +851,12 @@ function openSquare(id, owner=me, cache=myPhotos){
   };
   $("#savec").onclick=async()=>{
     $("#savec").disabled=true; $("#savec").textContent="保存中…";
-    try{ await store.setComment(owner,id,$("#cmt").value.trim()||null); ov.remove(); }
+    try{
+      const t=$("#cmt").value.trim();
+      await store.setComment(owner,id,t||null);
+      await store.addLog(owner,{id,label,ts:Date.now(),type:"cmt",text:t});   // コメント更新の記録
+      ov.remove();
+    }
     catch(err){ showErr("保存に失敗しました: "+err.message); $("#savec").disabled=false; $("#savec").textContent="💬 コメントを保存"; }
   };
   $("#save").onclick=()=>{
@@ -842,6 +871,7 @@ function openSquare(id, owner=me, cache=myPhotos){
       await store.deletePhoto(owner,id);
       await store.setFilled(owner,id,false);
       if(curJudge().any) await store.setJudge(owner,id,null,label,"del");    // 判定付きの写真を消したら判定も解除
+      else await store.addLog(owner,{id,label,ts:Date.now(),type:"del",text:""});   // 判定なし削除も記録
       await store.setComment(owner,id,null);   // コメントも一緒に消す（次の写真に古い説明が残らないように）
       if(boards[owner]?.gmComments?.[id]) await store.setGmComment(owner,id,null);   // GMコメントも同様
       delete cache[id];
@@ -872,7 +902,7 @@ function renderResults(){
         <span class="nm">${n}
           <div class="progress"><i style="width:${Math.round(s.filledCount/60*100)}%"></i></div>
         </span>
-        <span class="detail">${s.filledCount}/60</span>
+        <span class="detail"><b>${s.filledCount}</b>/60マス ・ <b>${s.score}</b>点</span>
       </div>`;
     }).join("");
     app.innerHTML=`
@@ -1052,7 +1082,7 @@ function renderGMPass(){
     <div class="card" style="padding:20px 16px;">
       <p style="text-align:center;font-weight:900;font-size:17px;color:var(--purple);">🔑 ゲームマスター画面</p>
       <p style="text-align:center;font-size:13px;margin-top:6px;">ゲームマスター用パスワードを入れてね</p>
-      <input class="passinput" id="gmpin" type="tel" inputmode="numeric" maxlength="8" placeholder="00000000" autocomplete="off" style="width:250px;font-size:20px;letter-spacing:5px;">
+      <input class="passinput" id="gmpin" type="tel" inputmode="numeric" maxlength="11" placeholder="00000000000" autocomplete="off" style="width:280px;font-size:17px;letter-spacing:3px;">
       <div class="notice err hidden" id="gerr" style="text-align:center;"></div>
       <div class="mbtns">
         <button class="btn primary" id="ggo">入る</button>
@@ -1190,7 +1220,7 @@ function renderDemoBoard(){
       <div class="scorenum"><b>${score}</b>点</div>
       <div class="scoredetail">マス ${filledCount}点 ＋ FREE 4点 ＋ ライン${lines}本×2点</div>
     </div>
-    ${log.length?`<div class="histbox"><div class="histhead">📋 GMチェックのお知らせ（メンバー本人にはこう見えるよ）</div>${log.map(histLine).join("")}</div>`:""}
+    ${log.length?`<div class="histbox"><div class="histhead">📋 これまでのきろく（メンバー本人にはこう見えるよ）</div>${log.map(histLine).join("")}</div>`:""}
     ${topicsHtml(b)}`;
   const bs=app.querySelector(".boardscroll"); if(bs&&sc) bs.scrollLeft=sc;
   if(topicsOpen){ const tp=app.querySelector("details.topics"); if(tp) tp.open=true; }
@@ -1261,7 +1291,10 @@ async function gmSquare(name,id){
   };
   const saveGmCmt=async()=>{   // 開いた時から変わっていたら保存（無駄な書き込みをしない）
     const t=q("#gcmt").value.trim();
-    if(t!==gmC0) await store.setGmComment(name,id,t||null);
+    if(t!==gmC0){
+      await store.setGmComment(name,id,t||null);
+      await store.addLog(name,{id,label,ts:Date.now(),type:"gmcmt",text:t});   // GMコメントの記録
+    }
   };
   const judge=async(verdict,type)=>{
     try{
