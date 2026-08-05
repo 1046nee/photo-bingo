@@ -144,6 +144,17 @@ button{font-family:inherit;cursor:pointer;}
   font-size:11.5px;font-weight:900;text-align:center;line-height:1.7;cursor:pointer;}
 .aggph.rejauto{border:2px dashed #B4B2A9;background:#F1EFE8;color:#5F5E5A;
   font-size:11px;font-weight:700;text-align:center;line-height:1.7;}
+/* ボタンの役割分け: 進む・開く=more（誘導・押せる感を強調）／戻る=back（控えめなグレー） */
+.btn.more{background:#EEEDFE;color:#3C3489;border:2.5px solid var(--purple);
+  box-shadow:0 3px 0 #8B84E0;font-weight:900;}
+.btn.more:active{transform:translateY(2px);box-shadow:none;}
+.btn.back{background:transparent;color:#6B6963;border:2px solid #C8C5BA;
+  box-shadow:none;font-size:13.5px;font-weight:700;}
+.btn.back:active{transform:translateY(1px);}
+/* 意味の違う塊の間の、目立ちすぎない区切り線 */
+.divider{height:2px;border-radius:1px;margin:20px 2px 0;
+  background:linear-gradient(90deg,transparent,#D8D5CA 18%,#D8D5CA 82%,transparent);}
+
 /* ×判定タイムライン（1件＝1カードで仕切る） */
 .tl{margin-top:12px;display:flex;flex-direction:column;gap:12px;}
 .tlitem{background:var(--paper);border:2.5px solid var(--purple);border-radius:14px;padding:12px 14px;}
@@ -151,6 +162,10 @@ button{font-family:inherit;cursor:pointer;}
 .tltopic{font-size:12.5px;font-weight:900;padding:2px 10px;border-radius:8px;border:1px solid rgba(44,44,42,.08);}
 .tltime{font-size:11px;color:var(--muted);font-weight:700;white-space:nowrap;text-align:right;line-height:1.5;}
 .tlexact{font-size:9.5px;font-weight:400;color:#A9A69D;}
+.tldate{display:flex;align-items:center;gap:10px;margin:6px 0 -4px;
+  color:#7F77DD;font-size:11.5px;font-weight:900;}
+.tldate::before,.tldate::after{content:"";flex:1;height:2px;border-radius:1px;
+  background:linear-gradient(90deg,#DDD9CE,#C9C3E8);}
 .tlwho{font-size:12.5px;font-weight:700;margin-bottom:6px;}
 .tlph{border-radius:10px;overflow:hidden;background:#EDEAE0;min-height:90px;cursor:pointer;
   display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:12px;}
@@ -749,8 +764,9 @@ function renderNamePick(){
     </div>
     ${rulesHtml()}
     ${topicsHtml()}
+    <div class="divider"></div>
     <div style="text-align:center;">
-      <button class="btn ghost" id="rejpage" style="margin-top:14px;width:100%;">❌ みんなの×判定一覧をみる</button>
+      <button class="btn more" id="rejpage" style="margin-top:14px;width:100%;">❌ みんなの×判定一覧をみる</button>
       <button class="btn plain" id="gmlink" style="margin-top:10px;">🔑 ゲームマスターはこちら</button>
     </div>`;
   // 個人画面に入るときは毎回パスワードを入れてもらう（端末に記憶しない）
@@ -1284,9 +1300,10 @@ function renderRejects(){
     </div></div>${legendHtml()}</div>
     ${sorted.length?`
       <h2 class="sec">🕒 さいきんの×判定</h2>
-      <div class="tl">${top5.map(rejTimelineItem).join("")}</div>
-      ${sorted.length>5?`<div class="mbtns"><button class="btn ghost" id="tlmore">もっと見る（ぜんぶで${sorted.length}件）</button></div>`:""}`:""}
-    <div class="mbtns"><button class="btn ghost" id="rejback">← 名前選択にもどる</button></div>`;
+      <div class="tl">${rejTimelineHtml(top5)}</div>
+      ${sorted.length>5?`<div class="mbtns"><button class="btn more" id="tlmore">もっと見る（ぜんぶで${sorted.length}件）▼</button></div>`:""}`:""}
+    <div class="divider"></div>
+    <div class="mbtns"><button class="btn back" id="rejback">← 名前選択にもどる</button></div>`;
   app.querySelectorAll(".bc[data-rejcell]").forEach(el=>{
     const open=()=>rejCellModal(el.dataset.rejcell);
     el.onclick=open;
@@ -1379,6 +1396,16 @@ function rejTimelineItem(r){
     ${r.note?`<div class="pcomment gm">🔑 ゲームマスター： ${esc(r.note)}</div>`:""}
   </div>`;
 }
+/* タイムライン一覧（日付が変わる境目に「── 8/5(火) ──」の区切りを挟む） */
+function rejTimelineHtml(list){
+  let out="", lastDay="";
+  for(const r of list){
+    const day=fmtDate(new Date(r.ngTs||r.ts));
+    if(day!==lastDay){ out+=`<div class="tldate">${day}</div>`; lastDay=day; }
+    out+=rejTimelineItem(r);
+  }
+  return out;
+}
 function wireTlPhotos(){
   app.querySelectorAll(".tlph[data-rejkey]").forEach(el=>{
     el.onclick=()=>{ const r=(boards["_rejects"]?.list||[]).find(x=>x.key===el.dataset.rejkey); if(r) rejPhotoModal(r); };
@@ -1391,8 +1418,9 @@ function renderRejTimeline(){
   app.innerHTML=`
     <h2 class="sec">🕒 ×判定タイムライン（ぜんぶで${sorted.length}件）</h2>
     <p style="font-size:12px;color:var(--muted);margin-top:6px;line-height:1.7;">いちばん上が最新の×判定だよ。写真をタップすると拡大できるよ。</p>
-    <div class="tl">${sorted.map(rejTimelineItem).join("")}</div>
-    <div class="mbtns"><button class="btn ghost" id="tlback">← ×判定一覧にもどる</button></div>`;
+    <div class="tl">${rejTimelineHtml(sorted)}</div>
+    <div class="divider"></div>
+    <div class="mbtns"><button class="btn back" id="tlback">← ×判定一覧にもどる</button></div>`;
   wireTlPhotos();
   document.getElementById("tlback").onclick=()=>{ view="rejects"; render(); };
   loadRejectPhotos();
@@ -1569,8 +1597,8 @@ function renderRevealed(isGm){
     <div class="card"><div class="boardscroll"><div class="bgrid">
       ${CELLS.map(aggCell).join("")}
     </div></div>${legendHtml()}</div>
-    ${isGm?`<div class="mbtns"><button class="btn ghost" id="gmresback">← GM画面にもどる</button></div>`
-      :(!me?`<div class="mbtns"><button class="btn ghost" id="resback">← 名前選択にもどる</button></div>`:"")}`;
+    ${isGm?`<div class="divider"></div><div class="mbtns"><button class="btn back" id="gmresback">← GM画面にもどる</button></div>`
+      :(!me?`<div class="divider"></div><div class="mbtns"><button class="btn back" id="resback">← 名前選択にもどる</button></div>`:"")}`;
   const tt=app.querySelector(".tblscroll"); if(tt&&tsc) tt.scrollLeft=tsc;
   const ab=app.querySelector(".boardscroll"); if(ab&&asc) ab.scrollLeft=asc;
   app.querySelectorAll(".rankrow.clickable").forEach(el=>{
@@ -1680,7 +1708,7 @@ async function renderPlayerBoard(name){
       ${CELLS.map(c=>cellHtml(c,{},filled,false,ng,ok,lit)).join("")}
     </div></div>${legendHtml()}</div>
     <p style="font-size:11.5px;color:var(--muted);text-align:center;margin-top:8px;">写真のあるマスをタップすると、拡大写真とコメントが見られるよ</p>
-    <button class="btn ghost backbtn" id="back" style="width:100%;">← 結果にもどる</button>
+    <button class="btn back backbtn" id="back" style="width:100%;">← 結果にもどる</button>
     <div class="loading" id="pl">写真を読み込み中…</div>`;
   const bs=app.querySelector(".boardscroll"); if(bs&&sc) bs.scrollLeft=sc;
   document.getElementById("back").onclick=()=>{ view=playerBack; render(); };
@@ -1765,8 +1793,11 @@ function renderGM(){
       </div>
     </div>
     <div class="mbtns">
-      <button class="btn ghost" id="gmpreview">🎉 いまの結果発表をプレビュー</button>
-      <button class="btn ghost" id="gmback">← 名前選択にもどる</button>
+      <button class="btn more" id="gmpreview">🎉 いまの結果発表をプレビュー</button>
+    </div>
+    <div class="divider"></div>
+    <div class="mbtns">
+      <button class="btn back" id="gmback">← 名前選択にもどる</button>
     </div>`;
   if(histOpen){ const hb=app.querySelector("details.histd"); if(hb) hb.open=true; }
   app.querySelectorAll(".smallbtn[data-n]").forEach(bt=>bt.onclick=()=>{ view="gmplayer:"+bt.dataset.n; render(); });
