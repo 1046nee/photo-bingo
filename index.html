@@ -139,6 +139,7 @@ button{font-family:inherit;cursor:pointer;}
   display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:11px;}
 .aggph img{width:100%;height:100%;object-fit:cover;}
 .aggname{text-align:center;font-size:12px;font-weight:700;margin-top:2px;}
+.rejmeta{text-align:center;font-size:10.5px;color:var(--muted);line-height:1.5;word-break:break-word;}
 /* 名前の男女色（結果発表まわり。名前選択ボタンと同じ青/赤） */
 .nm-boy{color:#2E63B0;}
 .nm-girl{color:#C23A3A;}
@@ -429,6 +430,19 @@ if (configured) {
       await fs.setDoc(fs.doc(db,"boards",name),
         {log: fs.arrayUnion(entry), updatedAt: Date.now()},{merge:true});
     },
+    // ×却下アーカイブ: 写真はphotosコレクションに reject_ キーで保存（imgルールを満たすので追加設定不要）、
+    // 一覧インデックスは boards/_rejects に持つ（既存のboards購読に乗るので読み取りコスト増なし）
+    async getPhotoByKey(key){
+      const snap=await fs.getDoc(fs.doc(db,"photos",key));
+      return snap.exists() ? (snap.data().img ?? null) : null;
+    },
+    async saveRejectPhoto(key, img){
+      await fs.setDoc(fs.doc(db,"photos",key),{img, ts: Date.now()});
+    },
+    async addReject(entry){
+      await fs.setDoc(fs.doc(db,"boards","_rejects"),
+        {list: fs.arrayUnion(entry), updatedAt: Date.now()},{merge:true});
+    },
     async setJudge(name, id, verdict, label, type){   // verdict: "ok" | "ng" | null（チェック待ちに戻す）
       const entry={id, label, ts:Date.now(), type};
       await fs.setDoc(fs.doc(db,"boards",name),
@@ -479,6 +493,15 @@ if (configured) {
       const d=load(); d.boards[name]??={filled:{}};
       d.boards[name].log??=[]; d.boards[name].log.push(entry);
       d.boards[name].updatedAt=Date.now(); save(d); notify();
+    },
+    async getPhotoByKey(key){ return load().photos[key] ?? null; },
+    async saveRejectPhoto(key,img){
+      const d=load(); d.photos[key]=img; save(d); notify();
+    },
+    async addReject(entry){
+      const d=load(); d.boards["_rejects"]??={};
+      d.boards["_rejects"].list??=[]; d.boards["_rejects"].list.push(entry);
+      d.boards["_rejects"].updatedAt=Date.now(); save(d); notify();
     },
     async setJudge(name,id,verdict,label,type){
       const d=load(); d.boards[name]??={filled:{}};
@@ -610,6 +633,8 @@ let view="board";       // board | results | player:名前 | pass | gm | gmplaye
 let lastHistKey=null;   // ブラウザ履歴に記録済みの画面（view|名前）。同じ画面の重複pushを防ぐ
 let popNav=false;       // 戻る/進む起因の描画では履歴を積まない（replaceで整合だけ取る）
 let playerBack="results";   // 個人ボードの「← 結果にもどる」の戻り先（GMプレビューから開いたときは gmresults）
+let rejOpen=false;          // 「却下された回答集」の開閉状態（再描画で維持する）
+const rejPhotoCache={};     // 却下アーカイブ写真のキャッシュ（key→dataURL。上書きされないので無期限）
 const app=document.getElementById("app");
 const tabs=document.getElementById("tabs");
 const now=()=>new Date();
@@ -1105,7 +1130,9 @@ function renderResults(){
       ${parityHtml}
       ${targets.length?`
         <h2 class="sec">👀 ${isViewer?"みんなの進捗":`${esc(PROGRESS_VIEWER)}の進捗（特別公開中）`}</h2>
-        <div class="rank">${progRows}</div>`:""}`;
+        <div class="rank">${progRows}</div>`:""}
+      ${rejectsHtml()}`;
+    wireRejects();
     return;
   }
   renderRevealed(false);
@@ -1113,6 +1140,47 @@ function renderResults(){
 
 /* GM用: 現時点での結果発表をプレビュー（メンバーには見えない） */
 function renderGMResults(){ renderRevealed(true); }
+
+/* ---------- ❌ 却下された回答集（発表前から全員公開のアーカイブ） ----------
+   ×判定の瞬間の写真を photos/reject_* に保存してあるので、撮り直されても残る。
+   一覧は boards/_rejects（購読済み）から。写真は開いたときだけ読む＋キャッシュ */
+function rejectsHtml(){
+  const list=(boards["_rejects"]?.list||[]).slice().sort((a,b)=>b.ts-a.ts);
+  if(!list.length) return "";
+  return `<details class="histd" id="rejbox" ${rejOpen?"open":""}>
+    <summary>❌ 却下された回答集（${list.length}件）</summary>
+    <p style="font-size:11.5px;color:var(--muted);margin-top:4px;line-height:1.7;">ゲームマスターに×にされた回答のアーカイブだよ。撮り直す前の写真もここに残るよ🫣</p>
+    <div class="agggrid">
+      ${list.map(r=>`
+        <div class="aggitem">
+          <div class="aggph" id="rej-${esc(r.key)}">読み込み中…</div>
+          <div class="aggname">${nameHtml(r.name)}「${esc(r.label)}」</div>
+          <div class="rejmeta">${fmtFull(new Date(r.ts))}${r.manual?"・GM登録":""}</div>
+          ${r.note?`<div class="rejmeta"><span class="ct-gm">🔑 ${esc(r.note)}</span></div>`:""}
+        </div>`).join("")}
+    </div>
+  </details>`;
+}
+async function loadRejectPhotos(){
+  const list=boards["_rejects"]?.list||[];
+  for(const r of list){
+    let ph=document.getElementById(`rej-${r.key}`);
+    if(!ph) return;   // 画面が変わったら中断
+    if(rejPhotoCache[r.key]){ ph.innerHTML=`<img src="${rejPhotoCache[r.key]}" alt="">`; continue; }
+    let img=null;
+    try{ img=await store.getPhotoByKey(r.key); }catch(e){}
+    ph=document.getElementById(`rej-${r.key}`);
+    if(!ph) return;
+    if(img){ rejPhotoCache[r.key]=img; ph.innerHTML=`<img src="${img}" alt="">`; }
+    else ph.textContent="写真なし";
+  }
+}
+function wireRejects(){
+  const rb=document.getElementById("rejbox");
+  if(!rb) return;
+  rb.ontoggle=()=>{ rejOpen=rb.open; if(rb.open) loadRejectPhotos(); };
+  if(rb.open) loadRejectPhotos();
+}
 
 /* カテゴリー別まとめ表（左端＝名前・各カテゴリーの埋めマス数・ライン数・点数。
    数え方は点数と同じ＝×判定のマスは数に入れない） */
@@ -1193,6 +1261,7 @@ function renderRevealed(isGm){
     <div class="card"><div class="boardscroll"><div class="bgrid">
       ${CELLS.map(aggCell).join("")}
     </div></div>${legendHtml()}</div>
+    ${rejectsHtml()}
     ${isGm?`<div class="mbtns"><button class="btn ghost" id="gmresback">← GM画面にもどる</button></div>`
       :(!me?`<div class="mbtns"><button class="btn ghost" id="resback">← 名前選択にもどる</button></div>`:"")}`;
   const tt=app.querySelector(".tblscroll"); if(tt&&tsc) tt.scrollLeft=tsc;
@@ -1212,6 +1281,7 @@ function renderRevealed(isGm){
     el.onclick=open;
     el.onkeydown=e=>{ if(e.key==="Enter"||e.key===" "){e.preventDefault();open();} };
   });
+  wireRejects();
   if(isGm){ document.getElementById("gmresback").onclick=()=>{ view="gm"; render(); }; }
   const rb=document.getElementById("resback");
   if(rb) rb.onclick=()=>{ view="board"; render(); };   // ログインなし閲覧→名前選択にもどる
@@ -1390,12 +1460,14 @@ function renderGM(){
     </div>
     <div class="mbtns">
       <button class="btn ghost" id="gmpreview">🎉 いまの結果発表をプレビュー</button>
+      <button class="btn ghost" id="rejadd">❌ 昔の×写真を登録（スクショ）</button>
       <button class="btn ghost" id="gmback">← 名前選択にもどる</button>
     </div>`;
   if(histOpen){ const hb=app.querySelector("details.histd"); if(hb) hb.open=true; }
   app.querySelectorAll(".smallbtn[data-n]").forEach(bt=>bt.onclick=()=>{ view="gmplayer:"+bt.dataset.n; render(); });
   document.getElementById("demoup").onclick=()=>{ view="gmdemo"; render(); };
   document.getElementById("gmpreview").onclick=()=>{ view="gmresults"; render(); };
+  document.getElementById("rejadd").onclick=rejUploadModal;
   document.getElementById("gmback").onclick=()=>{ gmOK=false; view="board"; render(); };   // 出たら次回また要パスワード
 }
 
@@ -1556,9 +1628,22 @@ async function gmSquare(name,id){
       await store.addLog(name,{id,label,ts:Date.now(),type:"gmcmt",text:t});   // GMコメントの記録
     }
   };
+  const archiveReject=async()=>{
+    // ×にした瞬間の写真を「却下された回答集」に残す（撮り直されても見られるように）
+    const pTs=boards[name]?.photoTs?.[id] ?? 0;
+    const dup=(boards["_rejects"]?.list||[]).some(r=>r.name===name && r.cellId===id && r.photoTs===pTs);
+    if(dup) return;   // 同じ写真の×は二重登録しない（×→取消→× のケース）
+    let img=null;
+    try{ img=await getPhotoCached(name,id); }catch(e){}
+    if(!img) return;
+    const key=`reject_${name}_${id}_${Date.now()}`;
+    await store.saveRejectPhoto(key,img);
+    await store.addReject({key,name,cellId:id,label,ts:Date.now(),photoTs:pTs,manual:false,note:q("#gcmt").value.trim()||""});
+  };
   const judge=async(verdict,type)=>{
     try{
       await saveGmCmt();   // 判定と一緒にGMコメントも保存
+      if(verdict==="ng") await archiveReject();
       await store.setJudge(name,id,verdict,label,type);
     }catch(e){ showGmErr("保存に失敗しました: "+e.message); return; }
     done();
@@ -1589,6 +1674,62 @@ async function gmSquare(name,id){
   try{ img=await getPhotoCached(name,id); }catch(e){}
   if(!ov.isConnected) return;
   if(img) q("#gpv").src=img; else q("#gpv").remove();
+}
+
+/* ---------- GM用: 昔の×写真（スクショ）を却下アーカイブに登録するモーダル ----------
+   撮り直しで消えた×写真を、GMが手元のスクショから登録できる（「GM登録」印つきで却下集に載る） */
+function rejUploadModal(){
+  const ov=document.createElement("div");
+  ov.className="overlay";
+  ov.innerHTML=`
+    <div class="modal">
+      <h3>❌ 昔の×写真を登録</h3>
+      <p style="font-size:12px;color:var(--muted);line-height:1.7;margin-top:6px;">撮り直しで消えた×写真のスクショを「却下された回答集」に登録できるよ。だれの・どのお題かを選んでね。</p>
+      <select class="cmtbox" id="rjname">${MEMBERS.map(n=>`<option value="${n}">${n}</option>`).join("")}</select>
+      <select class="cmtbox" id="rjcell">${Object.entries(CATS).map(([k,c])=>
+        `<optgroup label="${c.name}">${CELLS.filter(x=>x.cat===k).map(x=>`<option value="${x.id}">${x.label.replace(/\n/g,"")}</option>`).join("")}</optgroup>`).join("")}</select>
+      <input type="file" accept="image/*" id="rjfile" class="hidden">
+      <img class="preview hidden" id="rjpv">
+      <textarea class="cmtbox" id="rjnote" maxlength="100" rows="2" placeholder="🔑 GMコメント（なぜ×だったか・なくてもOK）"></textarea>
+      <div class="mbtns">
+        <button class="btn primary" id="rjpick">📷 スクショを選ぶ</button>
+        <button class="btn primary hidden" id="rjsave">この写真で登録する</button>
+        <button class="btn plain" id="rjclose">閉じる</button>
+      </div>
+      <div class="notice err hidden" id="rjerr"></div>
+    </div>`;
+  document.body.appendChild(ov);
+  const q2=s=>ov.querySelector(s);
+  let pend=null;
+  const showE=t=>{ const e=q2("#rjerr"); e.textContent=t; e.classList.remove("hidden"); };
+  q2("#rjpick").onclick=()=>q2("#rjfile").click();
+  q2("#rjfile").onchange=async e=>{
+    const f=e.target.files[0]; if(!f) return;
+    q2("#rjpick").disabled=true; q2("#rjpick").textContent="読み込み中…";
+    try{
+      pend=await compress(f);
+      q2("#rjpv").src=pend; q2("#rjpv").classList.remove("hidden");
+      q2("#rjsave").classList.remove("hidden");
+      q2("#rjpick").textContent="別の写真にする";
+      q2("#rjerr").classList.add("hidden");
+    }catch(err){ showE(err.message); }
+    q2("#rjpick").disabled=false;
+  };
+  q2("#rjsave").onclick=async()=>{
+    if(!pend) return;
+    q2("#rjsave").disabled=true; q2("#rjsave").textContent="登録中…";
+    try{
+      const name=q2("#rjname").value;
+      const cellId=q2("#rjcell").value;
+      const label=CELLS.find(c=>c.id===cellId).label.replace(/\n/g,"");
+      const key=`reject_${name}_${cellId}_${Date.now()}`;
+      await store.saveRejectPhoto(key,pend);
+      await store.addReject({key,name,cellId,label,ts:Date.now(),photoTs:-1,manual:true,note:q2("#rjnote").value.trim()||""});
+      ov.remove();
+    }catch(err){ showE("登録に失敗しました: "+err.message); q2("#rjsave").disabled=false; q2("#rjsave").textContent="この写真で登録する"; }
+  };
+  q2("#rjclose").onclick=()=>ov.remove();
+  ov.onclick=e=>{ if(e.target===ov) ov.remove(); };
 }
 
 /* ---------- ブラウザ/スマホの「戻る・進む」対応 ----------
