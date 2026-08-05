@@ -164,6 +164,31 @@ h2.sec{font-size:16px;font-weight:900;color:var(--purple);margin-top:18px;
 .paritybox b.podd{background:#5B4BC4;}
 .paritybox b.peven{background:#C75BAB;}
 .paritybox span{font-size:11px;color:var(--muted);font-weight:700;}
+/* 発表後にトップ（名前選択画面）へ出す「結果をみる」ボタン */
+.resultsbtn{display:block;width:100%;margin-top:14px;padding:16px;font-size:18px;font-weight:900;letter-spacing:2px;
+  color:#fff;border:none;border-radius:16px;
+  background:linear-gradient(135deg,#E8A020 0%,#C75BAB 55%,#5B4BC4 100%);
+  box-shadow:0 4px 0 rgba(90,50,120,.45),0 0 10px 2px rgba(232,160,32,.3);
+  animation:resglow 1.8s ease-in-out infinite;}
+.resultsbtn:active{transform:translateY(2px);box-shadow:none;}
+@keyframes resglow{
+  0%,100%{box-shadow:0 4px 0 rgba(90,50,120,.45),0 0 8px 2px rgba(232,160,32,.25);}
+  50%{box-shadow:0 4px 0 rgba(90,50,120,.45),0 0 18px 5px rgba(232,160,32,.55);}
+}
+/* カテゴリー別まとめ表（人×カテゴリー。名前列は左に固定して横スクロール） */
+.tblscroll{overflow-x:auto;-webkit-overflow-scrolling:touch;margin-top:12px;
+  background:var(--paper);border:2.5px solid var(--purple);border-radius:14px;}
+.sumtbl{border-collapse:collapse;width:100%;min-width:500px;font-size:11.5px;}
+.sumtbl th,.sumtbl td{padding:8px 4px;text-align:center;border-bottom:1px solid #EDEAE0;white-space:nowrap;}
+.sumtbl thead th{font-size:10.5px;font-weight:900;}
+.sumtbl th.tn,.sumtbl td.tn{position:sticky;left:0;z-index:1;background:var(--paper);
+  text-align:left;padding-left:10px;font-weight:900;box-shadow:2px 0 0 rgba(60,52,137,.10);}
+.sumtbl td.tn{cursor:pointer;}
+.sumtbl tbody tr:last-child td{border-bottom:none;}
+.sumtbl small{font-size:9px;color:var(--muted);font-weight:700;}
+.sumtbl td.full{background:#FFF3CF;color:#9A6B00;font-weight:900;}
+.sumtbl td.ln{font-weight:900;}
+.sumtbl td.sc{font-weight:900;color:var(--purple);}
 
 /* ---------- name colors ---------- */
 .namebtn.boy{border-color:#2E63B0;color:#2E63B0;box-shadow:0 3px 0 rgba(46,99,176,.25);}
@@ -275,6 +300,9 @@ h2.sec{font-size:16px;font-weight:900;color:var(--purple);margin-top:18px;
   .lg{font-size:10.5px;gap:5px 12px;margin-top:10px;}
   .marklegend{font-size:10.5px;margin-top:8px;}
   .aggnum{min-width:17px;height:17px;border-radius:9px;font-size:11px;}
+  .sumtbl{font-size:13px;}
+  .sumtbl thead th{font-size:12px;}
+  .sumtbl small{font-size:10px;}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important;}}
 </style>
@@ -639,6 +667,11 @@ function render(){
     if(canReveal() || gmOK) return renderPlayerBoard(view.slice(7));
     view="results";
   }
+  if(view==="results" && !me){
+    // 発表後はログイン（名前選択）なしでも結果を見られる（トップの「結果をみる」ボタンから）
+    if(canReveal()) return renderRevealed(false);
+    view="board";
+  }
   if(!me) return renderNamePick();
   if(view==="board") renderBoard();
   else if(view==="results") renderResults();
@@ -649,6 +682,7 @@ function renderNamePick(){
   const boys=MEMBERS.filter(n=>MALE_MEMBERS.has(n));
   const girls=MEMBERS.filter(n=>!MALE_MEMBERS.has(n));
   app.innerHTML=`
+    ${canReveal()?`<button class="resultsbtn" id="seeresults">🎉 結果をみる 🎉</button>`:""}
     <div class="card" style="padding:20px 16px;">
       <p style="text-align:center;font-weight:700;font-size:15px;">あなたの名前を選んでね</p>
       <div class="namegrid">
@@ -667,6 +701,8 @@ function renderNamePick(){
     pendingName=b.dataset.n; view="pass"; render();
   });
   document.getElementById("gmlink").onclick=()=>{ gmOK=false; view="gm"; render(); };   // GMも毎回入力
+  const sr=document.getElementById("seeresults");
+  if(sr) sr.onclick=()=>{ view="results"; render(); };   // 発表後だけ出るボタン（ログイン不要で結果へ）
 }
 
 /* ---------- パスワード設定・入力 ---------- */
@@ -1078,7 +1114,39 @@ function renderResults(){
 /* GM用: 現時点での結果発表をプレビュー（メンバーには見えない） */
 function renderGMResults(){ renderRevealed(true); }
 
+/* カテゴリー別まとめ表（左端＝名前・各カテゴリーの埋めマス数・ライン数・点数。
+   数え方は点数と同じ＝×判定のマスは数に入れない） */
+function summaryTableHtml(rows){
+  const SHORT={it:"アイテム",ch:"キャラ",pp:"人物",fd:"食べ物",nt:"自然",ot:"その他"};
+  const catIds={};
+  Object.keys(CATS).forEach(k=>{ catIds[k]=CELLS.filter(x=>x.cat===k).map(x=>x.id); });
+  const cnt=(name,k)=>{
+    const b=boards[name]||{};
+    return catIds[k].filter(id=>b.filled?.[id] && !b.ng?.[id]).length;
+  };
+  return `
+    <h2 class="sec">📊 カテゴリー別まとめ表</h2>
+    <p style="font-size:12px;color:var(--muted);margin-top:6px;line-height:1.7;">それぞれのカテゴリーを何マス埋めたかの一覧だよ（×のマスは数に入らないよ）。<b>ライン＝完成した たて・よこ・ななめ の列の数</b>。表は横にスクロールできて、名前をタップするとその人のビンゴが見られるよ。</p>
+    <div class="tblscroll"><table class="sumtbl">
+      <thead><tr><th class="tn">なまえ</th>
+        ${Object.keys(CATS).map(k=>`<th style="background:${CATS[k].bg};color:${CATS[k].tx};">${SHORT[k]}</th>`).join("")}
+        <th>ライン</th><th>点数</th></tr></thead>
+      <tbody>${rows.map(r=>`<tr>
+        <td class="tn" data-n="${r.name}" role="button" tabindex="0">${nameHtml(r.name)}</td>
+        ${Object.keys(CATS).map(k=>{
+          const c=cnt(r.name,k), t=catIds[k].length;
+          return `<td class="${c===t?"full":""}">${c}<small>/${t}</small></td>`;
+        }).join("")}
+        <td class="ln">${r.lines}<small>本</small></td>
+        <td class="sc">${r.score}<small>点</small></td>
+      </tr>`).join("")}</tbody>
+    </table></div>`;
+}
+
 function renderRevealed(isGm){
+  // 発表後は編集で順位が動くたびに再描画されるので、表と盤面の横スクロール位置は保つ
+  const tsc=app.querySelector(".tblscroll")?.scrollLeft ?? 0;
+  const asc=app.querySelector(".boardscroll")?.scrollLeft ?? 0;
   const rows=MEMBERS.map(n=>{
     const s=calcScore(boards[n]?.filled, boards[n]?.ng);
     return {name:n, ...s};
@@ -1119,13 +1187,22 @@ function renderRevealed(isGm){
       }).join("")}
     </div>
     <p style="font-size:12px;color:var(--muted);text-align:center;margin-top:10px;">名前をタップするとその人のフォトビンゴが見られます</p>
+    ${summaryTableHtml(rows)}
     <h2 class="sec">🧩 みんなの集計ビンゴ</h2>
     <p style="font-size:12px;color:var(--muted);margin-top:6px;line-height:1.7;">全員のビンゴを重ね合わせた盤面だよ。<b>数字＝写真をアップした人数</b>。マスをタップするとみんなの写真が見られるよ（うすいマス＝まだ誰も撮っていないお題）</p>
     <div class="card"><div class="boardscroll"><div class="bgrid">
       ${CELLS.map(aggCell).join("")}
     </div></div>${legendHtml()}</div>
-    ${isGm?`<div class="mbtns"><button class="btn ghost" id="gmresback">← GM画面にもどる</button></div>`:""}`;
+    ${isGm?`<div class="mbtns"><button class="btn ghost" id="gmresback">← GM画面にもどる</button></div>`
+      :(!me?`<div class="mbtns"><button class="btn ghost" id="resback">← 名前選択にもどる</button></div>`:"")}`;
+  const tt=app.querySelector(".tblscroll"); if(tt&&tsc) tt.scrollLeft=tsc;
+  const ab=app.querySelector(".boardscroll"); if(ab&&asc) ab.scrollLeft=asc;
   app.querySelectorAll(".rankrow.clickable").forEach(el=>{
+    const open=()=>{ playerBack=isGm?"gmresults":"results"; view="player:"+el.dataset.n; render(); };
+    el.onclick=open;
+    el.onkeydown=e=>{ if(e.key==="Enter"){open();} };
+  });
+  app.querySelectorAll(".sumtbl td.tn[data-n]").forEach(el=>{
     const open=()=>{ playerBack=isGm?"gmresults":"results"; view="player:"+el.dataset.n; render(); };
     el.onclick=open;
     el.onkeydown=e=>{ if(e.key==="Enter"){open();} };
@@ -1136,6 +1213,8 @@ function renderRevealed(isGm){
     el.onkeydown=e=>{ if(e.key==="Enter"||e.key===" "){e.preventDefault();open();} };
   });
   if(isGm){ document.getElementById("gmresback").onclick=()=>{ view="gm"; render(); }; }
+  const rb=document.getElementById("resback");
+  if(rb) rb.onclick=()=>{ view="board"; render(); };   // ログインなし閲覧→名前選択にもどる
 }
 
 /* ---------- 閲覧用モーダル（発表後のみんなのビンゴで写真とコメントを拡大表示） ---------- */
