@@ -149,7 +149,8 @@ button{font-family:inherit;cursor:pointer;}
 .tlitem{background:var(--paper);border:2.5px solid var(--purple);border-radius:14px;padding:12px 14px;}
 .tlhead{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px;}
 .tltopic{font-size:12.5px;font-weight:900;padding:2px 10px;border-radius:8px;border:1px solid rgba(44,44,42,.08);}
-.tltime{font-size:11px;color:var(--muted);font-weight:700;white-space:nowrap;}
+.tltime{font-size:11px;color:var(--muted);font-weight:700;white-space:nowrap;text-align:right;line-height:1.5;}
+.tlexact{font-size:9.5px;font-weight:400;color:#A9A69D;}
 .tlwho{font-size:12.5px;font-weight:700;margin-bottom:6px;}
 .tlph{border-radius:10px;overflow:hidden;background:#EDEAE0;min-height:90px;cursor:pointer;
   display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:12px;}
@@ -1364,10 +1365,13 @@ function rejPhotoModal(r){
 function rejTimelineItem(r){
   const cell=CELLS.find(c=>c.id===r.cellId);
   const cat=cell?CATS[cell.cat]:null;
+  const t=r.ngTs||r.ts;
+  // 相対表記＋正確な日付時刻を小さく併記（7日以上前は相対表記自体が日付+時刻なので併記しない）
+  const exact=(now()-t)<7*86400000?`<br><span class="tlexact">${fmtFull(new Date(t))}</span>`:"";
   return `<div class="tlitem">
     <div class="tlhead">
       <span class="tltopic" style="${cat?`background:${cat.bg};color:${cat.tx};`:""}">「${esc(r.label)}」</span>
-      <span class="tltime">${fmtRel(r.ngTs||r.ts)}</span>
+      <span class="tltime">${fmtRel(t)}${exact}</span>
     </div>
     <div class="tlwho">📸 ${nameHtml(r.name)} の回答</div>
     <div class="tlph" data-rejph="${esc(r.key)}" data-rejkey="${esc(r.key)}" role="button" tabindex="0">読み込み中…</div>
@@ -1441,10 +1445,10 @@ function myRejUpload(owner, ngEv){
   ov.innerHTML=`
     <div class="modal">
       <h3>📤 ×になった写真をアップ</h3>
-      <p style="font-size:12px;color:var(--muted);line-height:1.7;margin-top:6px;">「${esc(ngEv.label)}」（${fmtFull(new Date(ngEv.ts))} に×）の当時の写真をアップしてね。「みんなの×判定一覧」に載るよ。</p>
+      <p style="font-size:12px;color:var(--muted);line-height:1.7;margin-top:6px;">「${esc(ngEv.label)}」（${fmtFull(new Date(ngEv.ts))} に×）の当時の写真をアップしてね。「みんなの×判定一覧」に載るよ。${cmt0||gmc0?"当時のコメントはきろくから自動で付くよ。":""}</p>
       <input type="file" accept="image/*" id="mrfile" class="hidden">
       <img class="preview hidden" id="mrpv">
-      <textarea class="cmtbox" id="mrcmt" maxlength="100" rows="2" placeholder="💬 当時のコメント（なくてもOK）">${esc(cmt0)}</textarea>
+      ${cmt0?`<div class="pcomment">💬 ${nameHtml(owner)}： ${esc(cmt0)}</div>`:""}
       ${gmc0?`<div class="pcomment gm">🔑 ゲームマスター： ${esc(gmc0)}</div>`:""}
       <div class="mbtns">
         <button class="btn primary" id="mrpick">📷 写真を選ぶ</button>
@@ -1480,7 +1484,7 @@ function myRejUpload(owner, ngEv){
       await store.saveRejectPhoto(key,pend);
       await store.addReject({key,name:owner,cellId:ngEv.id,label:ngEv.label,ts:Date.now(),
         ngTs:ngEv.ts,photoTs:-1,manual:false,
-        cmt:q2("#mrcmt").value.trim()||"",note:gmc0});
+        cmt:cmt0||"",note:gmc0});
       ov.remove();
     }catch(err){ showE("保存に失敗しました: "+err.message); q2("#mrsave").disabled=false; q2("#mrsave").textContent="この写真で保存する"; }
   };
