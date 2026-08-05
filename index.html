@@ -142,6 +142,8 @@ button{font-family:inherit;cursor:pointer;}
 .rejmeta{text-align:center;font-size:10.5px;color:var(--muted);line-height:1.5;word-break:break-word;}
 .aggph.rejmissing{border:2px dashed #C22B2B;background:#FCEBEB;color:#791F1F;
   font-size:11.5px;font-weight:900;text-align:center;line-height:1.7;cursor:pointer;}
+.aggph.rejauto{border:2px dashed #B4B2A9;background:#F1EFE8;color:#5F5E5A;
+  font-size:11px;font-weight:700;text-align:center;line-height:1.7;}
 /* 名前の男女色（結果発表まわり。名前選択ボタンと同じ青/赤） */
 .nm-boy{color:#2E63B0;}
 .nm-girl{color:#C23A3A;}
@@ -941,6 +943,7 @@ function renderBoard(){
   if(topicsOpen){ const tp=app.querySelector("details.topics"); if(tp) tp.open=true; }
   if(histOpen){ const hb=app.querySelector("details.histd:not(#myrejbox)"); if(hb) hb.open=true; }
   // 過去の×になった回答: 開いたら写真ロード、未アップはタップで再アップ、アップ済みはタップで拡大
+  backfillRejects([me]);   // 今×中で写真が残っている×記録は自動でアーカイブに取り込む
   const mrb=document.getElementById("myrejbox");
   if(mrb){
     mrb.ontoggle=()=>{ myRejOpen=mrb.open; if(mrb.open) loadRejectPhotos(); };
@@ -1172,6 +1175,49 @@ function rejForNg(name, cellId, ngTs){
     r.name===name && r.cellId===cellId && Math.abs((r.ngTs??r.ts)-ngTs)<60000);
 }
 
+// この×記録は「今の写真」をそのまま×アーカイブに使えるか
+// （現在も×判定中＝撮り直されていない＝×当時の写真がまだ残っているケース）
+function rejAutoFillable(name, ev){
+  const b=boards[name]||{};
+  if(!b.ng?.[ev.id] || !b.filled?.[ev.id]) return false;   // 今×中でなければ写真は特定できない
+  const newerNg=(b.log||[]).some(e=>e.type==="ng"&&e.id===ev.id&&e.ts>ev.ts);
+  if(newerNg) return false;   // より新しい×があるなら、この×の写真は今の写真ではない
+  return (b.photoTs?.[ev.id]??0) <= ev.ts+60000;   // ×の後に写真が差し替えられていない
+}
+
+// 「今×中で写真が残っている」×記録を自動でアーカイブに取り込む（1回だけ・完了すれば以後何もしない）
+const rejBackfillTried=new Set();
+async function backfillRejects(names){
+  for(const name of names){
+    const b=boards[name]||{};
+    const ngs=(b.log||[]).filter(e=>e.type==="ng");
+    for(const ev of ngs){
+      const k=`${name}|${ev.id}|${ev.ts}`;
+      if(rejBackfillTried.has(k)) continue;
+      if(rejForNg(name,ev.id,ev.ts)) continue;
+      if(!rejAutoFillable(name,ev)) continue;
+      rejBackfillTried.add(k);
+      try{
+        const img=await getPhotoCached(name,ev.id);
+        if(!img) continue;
+        // 当時のコメント: 現在も×中なのでcomments/gmCommentsが当時のまま残っている（無ければログから復元）
+        let cmt="",gmc="";
+        for(const e of (b.log||[])){
+          if(e.id!==ev.id) continue;
+          if(e.ts<=ev.ts && (e.type==="up"||e.type==="reup"||e.type==="cmt")) cmt=e.text||"";
+          if(e.ts<=ev.ts+60000 && e.type==="gmcmt") gmc=e.text||"";
+        }
+        cmt=b.comments?.[ev.id] ?? cmt;
+        gmc=b.gmComments?.[ev.id] ?? gmc;
+        const key=`reject_${name}_${ev.id}_${Date.now()}`;
+        await store.saveRejectPhoto(key,img);
+        await store.addReject({key,name,cellId:ev.id,label:ev.label,ts:Date.now(),ngTs:ev.ts,
+          photoTs:b.photoTs?.[ev.id]??0,manual:false,cmt:cmt||"",note:gmc||""});
+      }catch(e){}
+    }
+  }
+}
+
 // DOM上にある #rej-{key} へアーカイブ写真を読み込む（無い要素はスキップ）
 async function loadRejectPhotos(){
   const list=boards["_rejects"]?.list||[];
@@ -1214,6 +1260,7 @@ function renderRejects(){
     el.onkeydown=e=>{ if(e.key==="Enter"||e.key===" "){e.preventDefault();open();} };
   });
   document.getElementById("rejback").onclick=()=>{ view="board"; render(); };
+  backfillRejects(MEMBERS);   // 誰かが一覧を開いたら、全員分の「今×中で写真が残っている×記録」を取り込む
 }
 
 /* お題ごとの×回答一覧モーダル（時系列順・写真＋名前＋日時。「まだの人」は出さない） */
@@ -1281,12 +1328,18 @@ function rejPhotoModal(r){
 function myRejHtml(name){
   const ngs=(boards[name]?.log||[]).filter(e=>e.type==="ng").slice().sort((a,b)=>a.ts-b.ts);
   if(!ngs.length) return "";
-  const missing=ngs.some(ev=>!rejForNg(name,ev.id,ev.ts));
+  const missing=ngs.some(ev=>!rejForNg(name,ev.id,ev.ts) && !rejAutoFillable(name,ev));
   const items=ngs.map(ev=>{
     const r=rejForNg(name,ev.id,ev.ts);
     if(r) return `
       <div class="aggitem" data-rejkey="${esc(r.key)}" role="button" tabindex="0">
         <div class="aggph" id="rej-${esc(r.key)}">読み込み中…</div>
+        <div class="aggname">「${esc(ev.label)}」</div>
+        <div class="rejmeta">${fmtFull(new Date(ev.ts))} に×</div>
+      </div>`;
+    if(rejAutoFillable(name,ev)) return `
+      <div class="aggitem">
+        <div class="aggph rejauto">⏳<br>いまの写真を<br>自動で反映中…</div>
         <div class="aggname">「${esc(ev.label)}」</div>
         <div class="rejmeta">${fmtFull(new Date(ev.ts))} に×</div>
       </div>`;
