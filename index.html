@@ -26,7 +26,8 @@ button{font-family:inherit;cursor:pointer;}
 .hd{text-align:center;margin:-10px -8px 10px;padding:14px 10px 12px;
   background:linear-gradient(135deg,#443CA0 0%,#6656C5 55%,#8E5BB8 100%);
   border-radius:0 0 22px 22px;color:#fff;
-  box-shadow:0 2px 8px rgba(60,52,137,.18);}
+  box-shadow:0 2px 8px rgba(60,52,137,.18);cursor:pointer;}
+.hd .hdhome{font-size:9.5px;color:rgba(255,255,255,.72);margin-top:5px;letter-spacing:1px;}
 .hd .deco{display:inline-block;background:rgba(255,255,255,.16);border:1.5px solid rgba(255,255,255,.5);
   border-radius:999px;padding:3px 12px;font-size:10.5px;letter-spacing:3px;color:#fff;font-weight:700;}
 .hd h1{font-size:21px;font-weight:900;letter-spacing:2px;color:#fff;margin-top:6px;
@@ -344,6 +345,7 @@ h2.sec{font-size:16px;font-weight:900;color:var(--purple);margin-top:18px;
     <div class="deco">💊 ドパガキ治療プログラム 💊</div>
     <h1>👦 ドパガキ卒業フォトビンゴ 👧</h1>
     <div class="sub" id="subline">スクリーンの時間を減らして、外の世界をじっくり眺めよう｜満点100点</div>
+    <div class="hdhome">🏠 ここをタップでホームへ</div>
   </div>
   <div id="app"><div class="loading">読み込み中…</div></div>
 </div>
@@ -473,6 +475,11 @@ if (configured) {
       await fs.setDoc(fs.doc(db,"boards","_rejects"),
         {list: fs.arrayUnion(entry), updatedAt: Date.now()},{merge:true});
     },
+    async removeReject(entry){   // ×アーカイブの削除（GMの誤タップ重複の整理用。写真も消す）
+      await fs.setDoc(fs.doc(db,"boards","_rejects"),
+        {list: fs.arrayRemove(entry), updatedAt: Date.now()},{merge:true});
+      await fs.deleteDoc(fs.doc(db,"photos",entry.key));
+    },
     async setJudge(name, id, verdict, label, type){   // verdict: "ok" | "ng" | null（チェック待ちに戻す）
       const entry={id, label, ts:Date.now(), type};
       await fs.setDoc(fs.doc(db,"boards",name),
@@ -531,6 +538,12 @@ if (configured) {
     async addReject(entry){
       const d=load(); d.boards["_rejects"]??={};
       d.boards["_rejects"].list??=[]; d.boards["_rejects"].list.push(entry);
+      d.boards["_rejects"].updatedAt=Date.now(); save(d); notify();
+    },
+    async removeReject(entry){
+      const d=load(); d.boards["_rejects"]??={};
+      d.boards["_rejects"].list=(d.boards["_rejects"].list||[]).filter(r=>r.key!==entry.key);
+      delete d.photos[entry.key];
       d.boards["_rejects"].updatedAt=Date.now(); save(d); notify();
     },
     async setJudge(name,id,verdict,label,type){
@@ -664,6 +677,7 @@ let lastHistKey=null;   // ブラウザ履歴に記録済みの画面（view|名
 let popNav=false;       // 戻る/進む起因の描画では履歴を積まない（replaceで整合だけ取る）
 let playerBack="results";   // 個人ボードの「← 結果にもどる」の戻り先（GMプレビューから開いたときは gmresults）
 let myRejOpen=false;        // マイビンゴ「過去の×になった回答」の開閉状態（再描画で維持する）
+let gmRejOpen=false;        // GMボード「×アーカイブの管理」の開閉状態（再描画で維持する）
 const rejPhotoCache={};     // 却下アーカイブ写真のキャッシュ（key→dataURL。上書きされないので無期限）
 const app=document.getElementById("app");
 const tabs=document.getElementById("tabs");
@@ -964,7 +978,6 @@ function renderBoard(){
     <div class="statusbar">
       <span class="who">${me}</span>
       <span class="cnt"><b>${filledCount}</b>/60マス ・ <b>${score}</b>点</span>
-      <button class="smallbtn" id="switch">名前変更</button>
     </div>
     ${ngCount?`<div class="notice err">❌ ゲームマスターに×にされたマスが<b>${ngCount}コ</b>あるよ！赤い×のマスをタップして撮り直してね（撮り直すまで点数に入らないよ）</div>`:""}
     <div class="notice">マスをタップして、お題に合う写真をアップロード！💬ひとことコメントも書けるよ。追加・撮り直し・削除はいつでもOK。${store.demo?"<br>※お試しモード動作中":""}</div>
@@ -1001,9 +1014,6 @@ function renderBoard(){
       el.onclick=()=>{ const r=(boards["_rejects"]?.list||[]).find(x=>x.key===el.dataset.rejkey); if(r) rejPhotoModal(r); };
     });
   }
-  document.getElementById("switch").onclick=()=>{
-    me=null; myPhotos={}; view="board"; render();
-  };
   app.querySelectorAll(".bc.editable").forEach(el=>{
     const open=()=>openSquare(el.dataset.id);
     el.onclick=open;
@@ -1426,6 +1436,47 @@ function renderRejTimeline(){
   loadRejectPhotos();
 }
 
+/* GM用: そのプレイヤーの×アーカイブ管理（誤タップで重複したエントリを個別に削除できる） */
+function gmRejManageHtml(name){
+  const list=(boards["_rejects"]?.list||[]).filter(r=>r.name===name)
+    .sort((a,b)=>(b.ngTs??b.ts)-(a.ngTs??a.ts));
+  if(!list.length) return "";
+  return `<details class="histd" id="gmrejbox" ${gmRejOpen?"open":""}>
+    <summary>❌ ×アーカイブの管理（${list.length}件）</summary>
+    <p style="font-size:11.5px;color:var(--muted);margin-top:4px;line-height:1.7;">誤タップなどで<b>同じ写真がだぶって登録された</b>ときは、ここから削除できるよ（「みんなの×判定一覧」からも消えるよ）</p>
+    <div class="agggrid">
+      ${list.map(r=>`
+        <div class="aggitem">
+          <div class="aggph" data-rejph="${esc(r.key)}">読み込み中…</div>
+          <div class="aggname">「${esc(r.label)}」</div>
+          <div class="rejmeta">${fmtFull(new Date(r.ngTs||r.ts))} に×</div>
+          <button class="btn danger rejdel" data-key="${esc(r.key)}" style="width:100%;margin-top:4px;padding:7px;font-size:12px;">🗑 削除</button>
+        </div>`).join("")}
+    </div>
+  </details>`;
+}
+function wireGmRejManage(){
+  const box=document.getElementById("gmrejbox");
+  if(!box) return;
+  box.ontoggle=()=>{ gmRejOpen=box.open; if(box.open) loadRejectPhotos(); };
+  if(box.open) loadRejectPhotos();
+  box.querySelectorAll(".rejdel").forEach(bt=>{
+    bt.onclick=async()=>{
+      // confirm()は使わない方針なので、2度押しで確定（3秒で解除）
+      if(bt.dataset.arm!=="1"){
+        bt.dataset.arm="1"; bt.textContent="もう一度押すと削除！";
+        setTimeout(()=>{ if(bt.isConnected){ bt.dataset.arm=""; bt.textContent="🗑 削除"; } },3000);
+        return;
+      }
+      bt.disabled=true; bt.textContent="削除中…";
+      const r=(boards["_rejects"]?.list||[]).find(x=>x.key===bt.dataset.key);
+      if(!r){ bt.disabled=false; bt.textContent="🗑 削除"; return; }
+      try{ await store.removeReject(r); }   // 成功すれば再描画で消える
+      catch(e){ bt.disabled=false; bt.dataset.arm=""; bt.textContent="失敗…もう一度"; }
+    };
+  });
+}
+
 /* マイビンゴ用: 自分の過去の×になった回答（時系列）。写真がまだ無いものはアップを促す */
 function myRejHtml(name){
   const ngs=(boards[name]?.log||[]).filter(e=>e.type==="ng").slice().sort((a,b)=>a.ts-b.ts);
@@ -1817,7 +1868,7 @@ async function renderGMBoard(name){
   const gen=renderGen;
   const sc=app.querySelector(".boardscroll")?.scrollLeft ?? 0;
   const topicsOpen=app.querySelector("details.topics")?.open ?? false;
-  const histOpen=app.querySelector("details.histd")?.open ?? false;
+  const histOpen=app.querySelector("details.histd:not(#gmrejbox)")?.open ?? false;
   app.innerHTML=`
     <div class="statusbar">
       <span class="who">${dispName(name)}</span>
@@ -1829,12 +1880,14 @@ async function renderGMBoard(name){
       ${CELLS.map(c=>cellHtml(c,{},filled,false,ng,ok,lit)).join("")}
     </div></div>${legendHtml()}
     <div class="marklegend"><span style="color:#2F9E63;font-weight:700;">⭕＝チェックOK</span> ・ <span style="color:#C22B2B;font-weight:700;">❌＝要撮り直し</span> ・ <span style="color:#9A6B00;font-weight:700;">印なし＝チェック待ち</span></div></div>
+    ${gmRejManageHtml(name)}
     ${histHtml(b)}
     ${topicsHtml(b)}
     <div class="loading" id="pl">写真を読み込み中…</div>`;
   const bs=app.querySelector(".boardscroll"); if(bs&&sc) bs.scrollLeft=sc;
   if(topicsOpen){ const tp=app.querySelector("details.topics"); if(tp) tp.open=true; }
-  if(histOpen){ const hb=app.querySelector("details.histd"); if(hb) hb.open=true; }
+  if(histOpen){ const hb=app.querySelector("details.histd:not(#gmrejbox)"); if(hb) hb.open=true; }
+  wireGmRejManage();
   document.getElementById("gback").onclick=()=>{ view="gm"; render(); };
   document.getElementById("greload").onclick=()=>{
     Object.keys(gmPhotos).forEach(k=>{ if(k.startsWith(name+"_")) delete gmPhotos[k]; });
@@ -2013,6 +2066,12 @@ async function gmSquare(name,id){
   if(!ov.isConnected) return;
   if(img) q("#gpv").src=img; else q("#gpv").remove();
 }
+
+/* ---------- ヘッダーをタップするとホーム（名前選択）にもどる ---------- */
+document.querySelector(".hd").onclick=()=>{
+  me=null; myPhotos={}; pendingName=null; gmOK=false;
+  view="board"; render();
+};
 
 /* ---------- ブラウザ/スマホの「戻る・進む」対応 ----------
    render()が画面（view＋ログイン中の名前）を履歴に記録しているので、それを復元して描画する。
