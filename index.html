@@ -144,6 +144,16 @@ button{font-family:inherit;cursor:pointer;}
   font-size:11.5px;font-weight:900;text-align:center;line-height:1.7;cursor:pointer;}
 .aggph.rejauto{border:2px dashed #B4B2A9;background:#F1EFE8;color:#5F5E5A;
   font-size:11px;font-weight:700;text-align:center;line-height:1.7;}
+/* ×判定タイムライン（1件＝1カードで仕切る） */
+.tl{margin-top:12px;display:flex;flex-direction:column;gap:12px;}
+.tlitem{background:var(--paper);border:2.5px solid var(--purple);border-radius:14px;padding:12px 14px;}
+.tlhead{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px;}
+.tltopic{font-size:12.5px;font-weight:900;padding:2px 10px;border-radius:8px;border:1px solid rgba(44,44,42,.08);}
+.tltime{font-size:11px;color:var(--muted);font-weight:700;white-space:nowrap;}
+.tlwho{font-size:12.5px;font-weight:700;margin-bottom:6px;}
+.tlph{border-radius:10px;overflow:hidden;background:#EDEAE0;min-height:90px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:12px;}
+.tlph img{width:100%;display:block;}
 /* 名前の男女色（結果発表まわり。名前選択ボタンと同じ青/赤） */
 .nm-boy{color:#2E63B0;}
 .nm-girl{color:#C23A3A;}
@@ -647,6 +657,20 @@ const canReveal=()=>now()>=RESULTS_AT || revealParam;
 const fmt=d=>d.toLocaleString("ja-JP",{timeZone:"Asia/Tokyo",month:"numeric",day:"numeric",hour:"2-digit",minute:"2-digit"});
 const fmtFull=d=>d.toLocaleString("ja-JP",{timeZone:"Asia/Tokyo",month:"numeric",day:"numeric",weekday:"short",hour:"2-digit",minute:"2-digit"});   // 履歴用: 8/5(火) 01:02
 const fmtDate=d=>d.toLocaleDateString("ja-JP",{timeZone:"Asia/Tokyo",month:"numeric",day:"numeric",weekday:"short"});   // 日付区切り用: 8/5(火)
+const fmtTime=d=>d.toLocaleTimeString("ja-JP",{timeZone:"Asia/Tokyo",hour:"2-digit",minute:"2-digit"});   // 21:04
+// タイムライン用の相対時刻（Xふう）: たった今/n分前/n時間前/きのう 21:04/n日前/8/4(月) 21:04
+function fmtRel(ts){
+  const diff=now()-ts;
+  const m=Math.floor(diff/60000);
+  if(m<1) return "たった今";
+  if(m<60) return `${m}分前`;
+  const h=Math.floor(m/60);
+  if(h<24) return `${h}時間前`;
+  const d=Math.floor(h/24);
+  if(d<2) return `きのう ${fmtTime(new Date(ts))}`;
+  if(d<7) return `${d}日前`;
+  return `${fmtDate(new Date(ts))} ${fmtTime(new Date(ts))}`;
+}
 const esc=s=>String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
 async function getPhotoCached(name,id){
   const k=`${name}_${id}`;
@@ -683,7 +707,7 @@ function render(){
 
   document.getElementById("tab-board").classList.toggle("on",view==="board");
   document.getElementById("tab-results").classList.toggle("on",view==="results"||view.startsWith("player:"));
-  const noTabs = !me || view==="pass" || view==="gm" || view==="gmdemo" || view==="gmresults" || view==="rejects" || view.startsWith("gmplayer:");
+  const noTabs = !me || view==="pass" || view==="gm" || view==="gmdemo" || view==="gmresults" || view==="rejects" || view==="rejtl" || view.startsWith("gmplayer:");
   tabs.classList.toggle("hidden",noTabs);
 
   if(view==="pass") return renderPass();
@@ -691,6 +715,7 @@ function render(){
   if(view==="gmdemo") return gmOK ? renderDemoBoard() : renderGMPass();
   if(view==="gmresults") return gmOK ? renderGMResults() : renderGMPass();
   if(view==="rejects") return renderRejects();   // みんなの×判定一覧（誰でも見られる）
+  if(view==="rejtl") return renderRejTimeline(); // ×判定タイムライン全件（誰でも見られる）
   if(view.startsWith("gmplayer:")) return gmOK ? renderGMBoard(view.slice(9)) : renderGMPass();
   if(view.startsWith("player:")){
     // 個人ボードの閲覧は発表後は誰でも、発表前はGM（プレビュー経由）のみ
@@ -1004,7 +1029,7 @@ function openSquare(id, owner=me, cache=myPhotos){
       ${isNg?`<div class="notice err" style="margin-top:10px;">❌ この写真はゲームマスターに<b>×</b>にされたよ。お題に合う写真に撮り直してね！（撮り直すまで点数に入らないよ）</div>`:""}
       ${isOk?`<div class="notice" style="margin-top:10px;background:#E1F5EE;color:#085041;">⭕ この写真はゲームマスターに<b>〇</b>をもらってるよ！</div>`:""}
       <img class="preview ${has?"":"hidden"}" id="pv">
-      ${gmComment?`<div class="pcomment gm">🔑 GMからのコメント: ${esc(gmComment)}</div>`:""}
+      ${gmComment?`<div class="pcomment gm">🔑 ゲームマスター： ${esc(gmComment)}</div>`:""}
       ${has?"":`<p id="cmthint" style="text-align:center;font-size:12px;color:var(--muted);margin-top:10px;">📷 写真を選ぶと、💬ひとことコメントも一緒に書けるよ</p>`}
       <div class="${has?"":"hidden"}" id="cmtwrap">
         <textarea class="cmtbox" id="cmt" maxlength="100" rows="2"
@@ -1218,19 +1243,20 @@ async function backfillRejects(names){
   }
 }
 
-// DOM上にある #rej-{key} へアーカイブ写真を読み込む（無い要素はスキップ）
+// DOM上にある [data-rejph="key"] へアーカイブ写真を読み込む（同じ写真が複数箇所にあっても全部埋める）
 async function loadRejectPhotos(){
   const list=boards["_rejects"]?.list||[];
   for(const r of list){
-    let ph=document.getElementById(`rej-${r.key}`);
-    if(!ph) continue;
-    if(rejPhotoCache[r.key]){ ph.innerHTML=`<img src="${rejPhotoCache[r.key]}" alt="">`; continue; }
-    let img=null;
-    try{ img=await store.getPhotoByKey(r.key); }catch(e){}
-    ph=document.getElementById(`rej-${r.key}`);
-    if(!ph) continue;
-    if(img){ rejPhotoCache[r.key]=img; ph.innerHTML=`<img src="${img}" alt="">`; }
-    else ph.textContent="写真なし";
+    if(!document.querySelector(`[data-rejph="${CSS.escape(r.key)}"]`)) continue;
+    let img=rejPhotoCache[r.key]||null;
+    if(!img){
+      try{ img=await store.getPhotoByKey(r.key); }catch(e){}
+      if(img) rejPhotoCache[r.key]=img;
+    }
+    document.querySelectorAll(`[data-rejph="${CSS.escape(r.key)}"]`).forEach(el=>{
+      if(img) el.innerHTML=`<img src="${img}" alt="">`;
+      else el.textContent="写真なし";
+    });
   }
 }
 
@@ -1247,19 +1273,29 @@ function renderRejects(){
       ${n?`<span class="aggnum" style="background:#C22B2B;">${n}</span>`:""}
     </div>`;
   };
+  const sorted=list.slice().sort((a,b)=>(b.ngTs??b.ts)-(a.ngTs??a.ts));
+  const top5=sorted.slice(0,5);
   app.innerHTML=`
     <h2 class="sec">❌ みんなの×判定一覧</h2>
     <p style="font-size:12px;color:var(--muted);margin-top:6px;line-height:1.7;">ゲームマスターに×にされた回答のアーカイブだよ。<b>数字＝×になった回数</b>。マスをタップすると×になった写真が見られるよ（うすいマス＝×なし）</p>
     <div class="card"><div class="boardscroll"><div class="bgrid">
       ${CELLS.map(cell).join("")}
     </div></div>${legendHtml()}</div>
+    ${sorted.length?`
+      <h2 class="sec">🕒 さいきんの×判定</h2>
+      <div class="tl">${top5.map(rejTimelineItem).join("")}</div>
+      ${sorted.length>5?`<div class="mbtns"><button class="btn ghost" id="tlmore">もっと見る（ぜんぶで${sorted.length}件）</button></div>`:""}`:""}
     <div class="mbtns"><button class="btn ghost" id="rejback">← 名前選択にもどる</button></div>`;
   app.querySelectorAll(".bc[data-rejcell]").forEach(el=>{
     const open=()=>rejCellModal(el.dataset.rejcell);
     el.onclick=open;
     el.onkeydown=e=>{ if(e.key==="Enter"||e.key===" "){e.preventDefault();open();} };
   });
+  wireTlPhotos();
+  const tm=document.getElementById("tlmore");
+  if(tm) tm.onclick=()=>{ view="rejtl"; render(); };
   document.getElementById("rejback").onclick=()=>{ view="board"; render(); };
+  loadRejectPhotos();
   backfillRejects(MEMBERS);   // 誰かが一覧を開いたら、全員分の「今×中で写真が残っている×記録」を取り込む
 }
 
@@ -1282,7 +1318,7 @@ async function rejCellModal(cellId){
       <div class="agggrid">
         ${list.map(r=>`
           <div class="aggitem" data-rejkey="${esc(r.key)}" role="button" tabindex="0">
-            <div class="aggph" id="rej-${esc(r.key)}">読み込み中…</div>
+            <div class="aggph" data-rejph="${esc(r.key)}">読み込み中…</div>
             <div class="aggname">${nameHtml(r.name)}</div>
             <div class="rejmeta">${fmtFull(new Date(r.ngTs||r.ts))}</div>
           </div>`).join("")}
@@ -1308,8 +1344,8 @@ function rejPhotoModal(r){
       <h3>${esc(r.label)}</h3>
       <div class="vwho">📸 ${nameHtml(r.name)} の写真 ・ ${fmtFull(new Date(r.ngTs||r.ts))} に×</div>
       <img class="preview" id="rjpv2">
-      ${r.cmt?`<div class="pcomment">💬 ${esc(r.cmt)}</div>`:""}
-      ${r.note?`<div class="pcomment gm">🔑 ${esc(r.note)}</div>`:""}
+      ${r.cmt?`<div class="pcomment">💬 ${nameHtml(r.name)}： ${esc(r.cmt)}</div>`:""}
+      ${r.note?`<div class="pcomment gm">🔑 ゲームマスター： ${esc(r.note)}</div>`:""}
       <div class="mbtns"><button class="btn plain" id="rjc2">閉じる</button></div>
     </div>`;
   document.body.appendChild(ov);
@@ -1324,6 +1360,40 @@ function rejPhotoModal(r){
   })();
 }
 
+/* ×判定タイムラインの1件分（お題→写真→名前→コメントの塊。カード枠で仕切る） */
+function rejTimelineItem(r){
+  const cell=CELLS.find(c=>c.id===r.cellId);
+  const cat=cell?CATS[cell.cat]:null;
+  return `<div class="tlitem">
+    <div class="tlhead">
+      <span class="tltopic" style="${cat?`background:${cat.bg};color:${cat.tx};`:""}">「${esc(r.label)}」</span>
+      <span class="tltime">${fmtRel(r.ngTs||r.ts)}</span>
+    </div>
+    <div class="tlwho">📸 ${nameHtml(r.name)} の回答</div>
+    <div class="tlph" data-rejph="${esc(r.key)}" data-rejkey="${esc(r.key)}" role="button" tabindex="0">読み込み中…</div>
+    ${r.cmt?`<div class="pcomment">💬 ${nameHtml(r.name)}： ${esc(r.cmt)}</div>`:""}
+    ${r.note?`<div class="pcomment gm">🔑 ゲームマスター： ${esc(r.note)}</div>`:""}
+  </div>`;
+}
+function wireTlPhotos(){
+  app.querySelectorAll(".tlph[data-rejkey]").forEach(el=>{
+    el.onclick=()=>{ const r=(boards["_rejects"]?.list||[]).find(x=>x.key===el.dataset.rejkey); if(r) rejPhotoModal(r); };
+  });
+}
+
+/* ×判定タイムラインのフルページ（全件・最新→過去） */
+function renderRejTimeline(){
+  const sorted=(boards["_rejects"]?.list||[]).slice().sort((a,b)=>(b.ngTs??b.ts)-(a.ngTs??a.ts));
+  app.innerHTML=`
+    <h2 class="sec">🕒 ×判定タイムライン（ぜんぶで${sorted.length}件）</h2>
+    <p style="font-size:12px;color:var(--muted);margin-top:6px;line-height:1.7;">いちばん上が最新の×判定だよ。写真をタップすると拡大できるよ。</p>
+    <div class="tl">${sorted.map(rejTimelineItem).join("")}</div>
+    <div class="mbtns"><button class="btn ghost" id="tlback">← ×判定一覧にもどる</button></div>`;
+  wireTlPhotos();
+  document.getElementById("tlback").onclick=()=>{ view="rejects"; render(); };
+  loadRejectPhotos();
+}
+
 /* マイビンゴ用: 自分の過去の×になった回答（時系列）。写真がまだ無いものはアップを促す */
 function myRejHtml(name){
   const ngs=(boards[name]?.log||[]).filter(e=>e.type==="ng").slice().sort((a,b)=>a.ts-b.ts);
@@ -1333,7 +1403,7 @@ function myRejHtml(name){
     const r=rejForNg(name,ev.id,ev.ts);
     if(r) return `
       <div class="aggitem" data-rejkey="${esc(r.key)}" role="button" tabindex="0">
-        <div class="aggph" id="rej-${esc(r.key)}">読み込み中…</div>
+        <div class="aggph" data-rejph="${esc(r.key)}">読み込み中…</div>
         <div class="aggname">「${esc(ev.label)}」</div>
         <div class="rejmeta">${fmtFull(new Date(ev.ts))} に×</div>
       </div>`;
@@ -1375,7 +1445,7 @@ function myRejUpload(owner, ngEv){
       <input type="file" accept="image/*" id="mrfile" class="hidden">
       <img class="preview hidden" id="mrpv">
       <textarea class="cmtbox" id="mrcmt" maxlength="100" rows="2" placeholder="💬 当時のコメント（なくてもOK）">${esc(cmt0)}</textarea>
-      ${gmc0?`<div class="pcomment gm">🔑 GMコメント: ${esc(gmc0)}</div>`:""}
+      ${gmc0?`<div class="pcomment gm">🔑 ゲームマスター： ${esc(gmc0)}</div>`:""}
       <div class="mbtns">
         <button class="btn primary" id="mrpick">📷 写真を選ぶ</button>
         <button class="btn primary hidden" id="mrsave">この写真で保存する</button>
@@ -1534,8 +1604,8 @@ function viewSquare(name,id){
       <div class="center"><span class="cattag" style="background:${cat.bg};color:${cat.tx};">${cat.name}</span></div>
       <div class="vwho">📸 ${nameHtml(name)} の写真</div>
       <img class="preview" id="vpv">
-      ${comment?`<div class="pcomment">💬 ${esc(comment)}</div>`:""}
-      ${gmComment?`<div class="pcomment gm">🔑 GMより: ${esc(gmComment)}</div>`:""}
+      ${comment?`<div class="pcomment">💬 ${nameHtml(name)}： ${esc(comment)}</div>`:""}
+      ${gmComment?`<div class="pcomment gm">🔑 ゲームマスター： ${esc(gmComment)}</div>`:""}
       <div class="mbtns"><button class="btn plain" id="vclose">閉じる</button></div>
     </div>`;
   document.body.appendChild(ov);
@@ -1815,7 +1885,7 @@ async function gmSquare(name,id){
         ${!isOk&&!isNg?`<span class="cattag" style="background:#FFF1CC;color:#9A6B00;">チェック待ち</span>`:""}
       </div>
       <img class="preview" id="gpv">
-      ${comment?`<div class="pcomment">💬 本人のコメント: ${esc(comment)}</div>`:""}
+      ${comment?`<div class="pcomment">💬 ${name===DEMO_NAME?"🧪 お試し":nameHtml(name)}： ${esc(comment)}</div>`:""}
       <textarea class="cmtbox" id="gcmt" maxlength="100" rows="2"
         placeholder="🔑 GMからのコメント（本人のマスに表示されるよ。×の理由などに）">${esc(gmC0)}</textarea>
       <div class="mbtns" id="gbtnarea">
