@@ -105,7 +105,7 @@ button{font-family:inherit;cursor:pointer;}
 .cmtbox:focus{outline:2px solid var(--purple);border-color:var(--purple);}
 .pcomment{margin-top:8px;background:#F1EFE8;border-radius:10px;padding:8px 10px;
   font-size:12.5px;line-height:1.6;word-break:break-word;}
-.pcomment.gm{background:#EEEDFE;color:#3C3489;}
+.pcomment.gm{background:#E8F5DC;color:#2F6B1F;}   /* GMのコメント=緑で統一 */
 .mbtns{display:flex;flex-direction:column;gap:8px;margin-top:14px;}
 .btn{border-radius:12px;padding:13px;font-size:15px;font-weight:700;border:none;}
 .btn.primary{background:var(--purple);color:#fff;box-shadow:0 3px 0 #26215C;}
@@ -145,6 +145,15 @@ button{font-family:inherit;cursor:pointer;}
   font-size:11.5px;font-weight:900;text-align:center;line-height:1.7;cursor:pointer;}
 .aggph.rejauto{border:2px dashed #B4B2A9;background:#F1EFE8;color:#5F5E5A;
   font-size:11px;font-weight:700;text-align:center;line-height:1.7;}
+/* 新機能のお知らせバッジ */
+.newbadge{display:inline-block;background:#E75620;color:#fff;font-size:10px;font-weight:900;
+  padding:1.5px 9px;border-radius:999px;margin-right:7px;letter-spacing:1px;vertical-align:2px;
+  box-shadow:0 1px 0 rgba(0,0,0,.15);}
+/* ステージのしくみ表 */
+.stagetbl{margin-top:8px;display:flex;flex-direction:column;gap:6px;}
+.stagerow{display:flex;align-items:center;justify-content:space-between;gap:8px;}
+.stagept{font-size:12.5px;font-weight:700;}
+
 /* ボタンの役割分け: 進む・開く=more（誘導・押せる感を強調）／戻る=back（控えめなグレー） */
 .btn.more{background:#EEEDFE;color:#3C3489;border:2.5px solid var(--purple);
   box-shadow:0 3px 0 #8B84E0;font-weight:900;}
@@ -283,9 +292,11 @@ h2.sec{font-size:16px;font-weight:900;color:var(--purple);margin-top:18px;
 .histline.h-ok{background:#E1F5EE;color:#085041;border-radius:8px;padding:4px 8px;}
 .histline.h-ng{background:#FCEBEB;color:#791F1F;border-radius:8px;padding:4px 8px;}
 .histline.h-cmt{background:#EEEDFE;color:#3C3489;border-radius:8px;padding:4px 8px;}
-.histline.h-gmcmt{background:#FAEEDA;color:#633806;border-radius:8px;padding:4px 8px;}
-.ct-me{color:#1E7A4C;font-weight:700;}   /* かっこ内: 本人のコメント=緑 */
-.ct-gm{color:#C86A15;font-weight:700;}   /* かっこ内: GMのコメント=オレンジ */
+.histline.h-gmcmt{background:#E8F5DC;color:#2F6B1F;border-radius:8px;padding:4px 8px;}   /* GM=緑（〇判定の青緑とは別トーン） */
+/* 発言者の色ルール: プレイヤー=男女色（男=青・女=赤）、ゲームマスター=緑。全画面共通 */
+.pc-boy{color:#2E63B0;}
+.pc-girl{color:#C23A3A;}
+.ct-gm{color:#1E7A4C;font-weight:700;}   /* かっこ内: GMのコメント=緑 */
 .histdate{display:flex;align-items:center;gap:8px;margin:10px 0 2px;
   color:var(--muted);font-size:10.5px;font-weight:900;}
 .histdate::before,.histdate::after{content:"";flex:1;height:1.5px;background:#D8D5CA;border-radius:1px;}
@@ -480,6 +491,10 @@ if (configured) {
         {list: fs.arrayRemove(entry), updatedAt: Date.now()},{merge:true});
       await fs.deleteDoc(fs.doc(db,"photos",entry.key));
     },
+    async removeLogEntry(name, entry){   // 履歴1件の削除（誤タップの×記録の整理用）
+      await fs.setDoc(fs.doc(db,"boards",name),
+        {log: fs.arrayRemove(entry), updatedAt: Date.now()},{merge:true});
+    },
     async setJudge(name, id, verdict, label, type){   // verdict: "ok" | "ng" | null（チェック待ちに戻す）
       const entry={id, label, ts:Date.now(), type};
       await fs.setDoc(fs.doc(db,"boards",name),
@@ -546,6 +561,11 @@ if (configured) {
       delete d.photos[entry.key];
       d.boards["_rejects"].updatedAt=Date.now(); save(d); notify();
     },
+    async removeLogEntry(name,entry){
+      const d=load(); const b=d.boards[name]; if(!b) return;
+      b.log=(b.log||[]).filter(e=>!(e.ts===entry.ts && e.type===entry.type && e.id===entry.id));
+      b.updatedAt=Date.now(); save(d); notify();
+    },
     async setJudge(name,id,verdict,label,type){
       const d=load(); d.boards[name]??={filled:{}};
       d.boards[name].ok??={}; d.boards[name].ng??={}; d.boards[name].log??=[];
@@ -598,6 +618,20 @@ function stageHtml(score){
             :`<span class="stagenext">🏆 さいこうのステージ！</span>`}
     </div>
     ${next?`<div class="stageprog"><i style="width:${pct}%"></i></div>`:""}`;
+}
+
+// あそびかたの下に出す「ステージのしくみ」説明タブ（STAGES設定から動的に生成）
+function stageInfoHtml(){
+  return `<details class="histd"><summary>🎮 ステージのしくみ（点数でランクアップ！）</summary>
+    <p style="font-size:11.5px;color:var(--muted);margin-top:4px;line-height:1.7;">点数をとるとステージが上がるよ。いまのステージと「つぎまであと何点」は、マイビンゴの点数ボックスで見られるよ。</p>
+    <div class="stagetbl">
+      ${STAGES.map((st,i)=>{
+        const next=STAGES[i+1];
+        const range = next ? `${st.min}点〜${next.min-1}点` : `${st.min}点（満点）`;
+        return `<div class="stagerow"><span class="stagebadge">${st.emoji} ${st.name}</span><span class="stagept">${range}</span></div>`;
+      }).join("")}
+    </div>
+  </details>`;
 }
 
 // ステージが上がった瞬間のお祝い演出（同じセッション内で前より上がったときだけ）
@@ -669,8 +703,9 @@ let myPhotos={};        // id -> dataURL（自分のぶんだけキャッシュ�
 const gmPhotos={};      // "名前_マスID" -> {ts, img}（GM・閲覧用キャッシュ。tsはboards側photoTsと照合）
 const DEMO_NAME="_demo";   // GM練習用お試しボードの保存名（MEMBERSに無いのでランキング対象外）
 const demoPhotos={};       // お試しボードの写真キャッシュ
-const dispName=n=>n===DEMO_NAME?"🧪 お試し":n;
+const dispName=n=>n===DEMO_NAME?"🧪 お試し":nameHtml(n);
 const nameHtml=n=>`<span class="${MALE_MEMBERS.has(n)?"nm-boy":"nm-girl"}">${esc(n)}</span>`;   // 名前を男女色（青/赤）で表示
+const pcClass=n=>MALE_MEMBERS.has(n)?"pc-boy":"pc-girl";   // 発言（コメント文字）もその人の男女色にする
 let renderGen=0;        // 描画の世代番号（再描画時に古い写真読み込みループを止める）
 let view="board";       // board | results | player:名前 | pass | gm | gmplayer:名前 | gmdemo
 let lastHistKey=null;   // ブラウザ履歴に記録済みの画面（view|名前）。同じ画面の重複pushを防ぐ
@@ -777,10 +812,11 @@ function renderNamePick(){
       ${store.demo?`<div class="notice" style="margin-top:14px;">いまは<b>お試しモード</b>（この端末にだけ保存）。みんなで使うにはFirebase設定を貼り付けてね。</div>`:""}
     </div>
     ${rulesHtml()}
+    ${stageInfoHtml()}
     ${topicsHtml()}
     <div class="divider"></div>
     <div style="text-align:center;">
-      <button class="btn more" id="rejpage" style="margin-top:14px;width:100%;">❌ みんなの×判定一覧をみる</button>
+      <button class="btn more" id="rejpage" style="margin-top:14px;width:100%;"><span class="newbadge">New!</span>❌ みんなの×判定一覧をみる</button>
       <button class="btn plain" id="gmlink" style="margin-top:10px;">🔑 ゲームマスターはこちら</button>
     </div>`;
   // 個人画面に入るときは毎回パスワードを入れてもらう（端末に記憶しない）
@@ -788,7 +824,7 @@ function renderNamePick(){
     pendingName=b.dataset.n; view="pass"; render();
   });
   document.getElementById("gmlink").onclick=()=>{ gmOK=false; view="gm"; render(); };   // GMも毎回入力
-  document.getElementById("rejpage").onclick=()=>{ view="rejects"; render(); };
+  document.getElementById("rejpage").onclick=()=>{ view="rejects"; render(); window.scrollTo(0,0); };
   const sr=document.getElementById("seeresults");
   if(sr) sr.onclick=()=>{ view="results"; render(); };   // 発表後だけ出るボタン（ログイン不要で結果へ）
 }
@@ -800,7 +836,7 @@ function renderPass(){
   const existing=boards[n]?.pass;
   app.innerHTML=`
     <div class="card" style="padding:20px 16px;">
-      <p style="text-align:center;font-weight:900;font-size:17px;color:var(--purple);">${n}</p>
+      <p style="text-align:center;font-weight:900;font-size:17px;">${nameHtml(n)}</p>
       ${existing?`
         <p style="text-align:center;font-weight:700;font-size:14px;margin-top:8px;">パスワードを入れてね</p>`:`
         <p style="text-align:center;font-weight:700;font-size:14px;margin-top:8px;">はじめまして！<br>自分だけのパスワード（数字5桁）を決めてね</p>
@@ -883,9 +919,11 @@ function topicsHtml(board){
   </details>`;
 }
 
-function histLine(e, who){
-  // コメント内容も履歴に残す（本人の発言=緑、GMのコメント=オレンジで色分け）
-  const t=e.text?`（<span class="${e.type==="gmcmt"?"ct-gm":"ct-me"}">💬 ${esc(e.text)}</span>）`:"";
+function histLine(e, who, owner){
+  // コメント内容も履歴に残す（本人の発言=その人の男女色、GMのコメント=緑）
+  const speaker=who||owner;
+  const ccls=e.type==="gmcmt" ? "ct-gm" : (speaker?pcClass(speaker):"");
+  const t=e.text?`（<span class="${ccls}" style="font-weight:700;">💬 ${esc(e.text)}</span>）`:"";
   const msg={
     ok:`⭕ 「${esc(e.label)}」がゲームマスターに<b>〇</b>をもらったよ！`,
     ng:`❌ 「${esc(e.label)}」がゲームマスターに<b>×</b>にされたよ。撮り直してね！`,
@@ -898,27 +936,27 @@ function histLine(e, who){
     gmcmt:`🔑 「${esc(e.label)}」にゲームマスターからコメントが付いたよ${t}`,
   }[e.type]||"";
   if(!msg) return "";
-  const cls={ok:"h-ok", ng:"h-ng", cmt:"h-cmt", gmcmt:"h-gmcmt"}[e.type]||"";   // 〇=緑・×=赤・コメント=青紫/オレンジで一目でわかるように
-  return `<div class="histline ${cls}"><span class="histtime">${fmtFull(new Date(e.ts))}</span>${who?`<b>${who}</b>: `:""}${msg}</div>`;
+  const cls={ok:"h-ok", ng:"h-ng", cmt:"h-cmt", gmcmt:"h-gmcmt"}[e.type]||"";   // 〇=緑・×=赤・コメント=青紫/GM緑で一目でわかるように
+  return `<div class="histline ${cls}"><span class="histtime">${fmtFull(new Date(e.ts))}</span>${who?`<b>${nameHtml(who)}</b>: `:""}${msg}</div>`;
 }
 
 /* きろく一覧のHTML（日付が変わる境目に「── 8/5(火) ──」の区切り線を入れる） */
-function histListHtml(entries, withWho){
+function histListHtml(entries, withWho, owner){
   let out="", lastDay="";
   for(const e of entries){
     const day=fmtDate(new Date(e.ts));
     if(day!==lastDay){ out+=`<div class="histdate">${day}</div>`; lastDay=day; }
-    out+=histLine(e, withWho?e.who:undefined);
+    out+=histLine(e, withWho?e.who:undefined, owner);
   }
   return out;
 }
 
 /* きろくの開閉ブロック（新しい順に全件。長いときは中でスクロール） */
-function histHtml(board){
+function histHtml(board, owner){
   const log=(board?.log||[]).slice().reverse();
   if(!log.length) return "";
   return `<details class="histd"><summary>📋 これまでのきろく（${log.length}件）</summary>
-    <div class="histscroll">${histListHtml(log)}</div>
+    <div class="histscroll">${histListHtml(log, false, owner)}</div>
   </details>`;
 }
 
@@ -976,7 +1014,7 @@ function renderBoard(){
   const histOpen=app.querySelector("details.histd:not(#myrejbox)")?.open ?? false;
   app.innerHTML=`
     <div class="statusbar">
-      <span class="who">${me}</span>
+      <span class="who">${nameHtml(me)}</span>
       <span class="cnt"><b>${filledCount}</b>/60マス ・ <b>${score}</b>点</span>
     </div>
     ${ngCount?`<div class="notice err">❌ ゲームマスターに×にされたマスが<b>${ngCount}コ</b>あるよ！赤い×のマスをタップして撮り直してね（撮り直すまで点数に入らないよ）</div>`:""}
@@ -992,7 +1030,7 @@ function renderBoard(){
       ${stageHtml(score)}
     </div>
     ${myRejHtml(me)}
-    ${histHtml(b)}
+    ${histHtml(b, me)}
     ${topicsHtml(b)}`;
   const bs=app.querySelector(".boardscroll"); if(bs&&sc) bs.scrollLeft=sc;
   if(topicsOpen){ const tp=app.querySelector("details.topics"); if(tp) tp.open=true; }
@@ -1177,7 +1215,7 @@ function renderResults(){
     const progRows = targets.map(n=>{
       const s=calcScore(boards[n]?.filled, boards[n]?.ng);
       return `<div class="rankrow locked">
-        <span class="nm">${n}
+        <span class="nm">${nameHtml(n)}
           <div class="progress"><i style="width:${Math.round(s.filledCount/60*100)}%"></i></div>
         </span>
         <span class="detail"><b>${s.filledCount}</b>/60マス ・ <b>${s.score}</b>点</span>
@@ -1201,12 +1239,12 @@ function renderResults(){
     app.innerHTML=`
       <div class="countdown">結果発表は <b>${fmt(RESULTS_AT)}</b>！<br>
         ${isViewer
-          ?`👀 ${esc(PROGRESS_VIEWER)}は特別に、みんなの進捗が見えるよ<br>`
+          ?`👀 ${nameHtml(PROGRESS_VIEWER)}は特別に、みんなの進捗が見えるよ<br>`
           :`みんなの進み具合は発表までナイショだよ🤫<br>`}
         発表になったら、ここで<b>みんなの順位とビンゴ</b>が見られるよ🎉</div>
       ${parityHtml}
       ${targets.length?`
-        <h2 class="sec">👀 ${isViewer?"みんなの進捗":`${esc(PROGRESS_VIEWER)}の進捗（特別公開中）`}</h2>
+        <h2 class="sec">👀 ${isViewer?"みんなの進捗":`${nameHtml(PROGRESS_VIEWER)}の進捗（特別公開中）`}</h2>
         <div class="rank">${progRows}</div>`:""}`;
     return;
   }
@@ -1321,8 +1359,8 @@ function renderRejects(){
   });
   wireTlPhotos();
   const tm=document.getElementById("tlmore");
-  if(tm) tm.onclick=()=>{ view="rejtl"; render(); };
-  document.getElementById("rejback").onclick=()=>{ view="board"; render(); };
+  if(tm) tm.onclick=()=>{ view="rejtl"; render(); window.scrollTo(0,0); };   // 全件ページは必ず最新（一番上）から
+  document.getElementById("rejback").onclick=()=>{ view="board"; render(); window.scrollTo(0,0); };
   loadRejectPhotos();
   backfillRejects(MEMBERS);   // 誰かが一覧を開いたら、全員分の「今×中で写真が残っている×記録」を取り込む
 }
@@ -1372,7 +1410,7 @@ function rejPhotoModal(r){
       <h3>${esc(r.label)}</h3>
       <div class="vwho">📸 ${nameHtml(r.name)} の写真 ・ ${fmtFull(new Date(r.ngTs||r.ts))} に×</div>
       <img class="preview" id="rjpv2">
-      ${r.cmt?`<div class="pcomment">💬 ${nameHtml(r.name)}： ${esc(r.cmt)}</div>`:""}
+      ${r.cmt?`<div class="pcomment ${pcClass(r.name)}">💬 ${nameHtml(r.name)}： ${esc(r.cmt)}</div>`:""}
       ${r.note?`<div class="pcomment gm">🔑 ゲームマスター： ${esc(r.note)}</div>`:""}
       <div class="mbtns"><button class="btn plain" id="rjc2">閉じる</button></div>
     </div>`;
@@ -1402,7 +1440,7 @@ function rejTimelineItem(r){
     </div>
     <div class="tlwho">📸 ${nameHtml(r.name)} の回答</div>
     <div class="tlph" data-rejph="${esc(r.key)}" data-rejkey="${esc(r.key)}" role="button" tabindex="0">読み込み中…</div>
-    ${r.cmt?`<div class="pcomment">💬 ${nameHtml(r.name)}： ${esc(r.cmt)}</div>`:""}
+    ${r.cmt?`<div class="pcomment ${pcClass(r.name)}">💬 ${nameHtml(r.name)}： ${esc(r.cmt)}</div>`:""}
     ${r.note?`<div class="pcomment gm">🔑 ゲームマスター： ${esc(r.note)}</div>`:""}
   </div>`;
 }
@@ -1432,30 +1470,44 @@ function renderRejTimeline(){
     <div class="divider"></div>
     <div class="mbtns"><button class="btn back" id="tlback">← ×判定一覧にもどる</button></div>`;
   wireTlPhotos();
-  document.getElementById("tlback").onclick=()=>{ view="rejects"; render(); };
+  document.getElementById("tlback").onclick=()=>{ view="rejects"; render(); window.scrollTo(0,0); };
   loadRejectPhotos();
 }
 
-/* GM用: そのプレイヤーの×アーカイブ管理（誤タップで重複したエントリを個別に削除できる） */
+/* GM用: そのプレイヤーの×記録の管理。誤タップで重複した×は、写真アーカイブ済みでも
+   「本人にアップをお願い中（写真なし）」でも個別に削除できる（×記録＋アーカイブをセットで消す） */
 function gmRejManageHtml(name){
-  const list=(boards["_rejects"]?.list||[]).filter(r=>r.name===name)
-    .sort((a,b)=>(b.ngTs??b.ts)-(a.ngTs??a.ts));
-  if(!list.length) return "";
+  const b=boards[name]||{};
+  const ngs=(b.log||[]).filter(e=>e.type==="ng").slice().sort((x,y)=>y.ts-x.ts);
+  const matched=new Set();
+  const rows=ngs.map(ev=>{ const r=rejForNg(name,ev.id,ev.ts); if(r) matched.add(r.key); return {ev,r}; });
+  const orphans=(boards["_rejects"]?.list||[]).filter(r=>r.name===name && !matched.has(r.key))
+    .sort((x,y)=>(y.ngTs??y.ts)-(x.ngTs??x.ts));
+  if(!rows.length && !orphans.length) return "";
+  const delBtn=attrs=>`<button class="btn danger rejdel" ${attrs} style="width:100%;margin-top:4px;padding:7px;font-size:12px;">🗑 削除</button>`;
   return `<details class="histd" id="gmrejbox" ${gmRejOpen?"open":""}>
-    <summary>❌ ×アーカイブの管理（${list.length}件）</summary>
-    <p style="font-size:11.5px;color:var(--muted);margin-top:4px;line-height:1.7;">誤タップなどで<b>同じ写真がだぶって登録された</b>ときは、ここから削除できるよ（「みんなの×判定一覧」からも消えるよ）</p>
+    <summary>❌ ×記録の管理（${rows.length+orphans.length}件）</summary>
+    <p style="font-size:11.5px;color:var(--muted);margin-top:4px;line-height:1.7;">誤タップでだぶった×はここから削除できるよ。<b>写真がまだ無い（アップお願い中）ものも削除OK</b>。消すと本人へのお願いも「みんなの×判定一覧」からも消えるよ</p>
     <div class="agggrid">
-      ${list.map(r=>`
+      ${rows.map(({ev,r})=>`
+        <div class="aggitem">
+          ${r?`<div class="aggph" data-rejph="${esc(r.key)}">読み込み中…</div>`
+             :`<div class="aggph rejmissing" style="cursor:default;">📤<br>本人にアップを<br>お願い中</div>`}
+          <div class="aggname">「${esc(ev.label)}」</div>
+          <div class="rejmeta">${fmtFull(new Date(ev.ts))} に×</div>
+          ${delBtn(`data-ngts="${ev.ts}" data-cell="${ev.id}"`)}
+        </div>`).join("")}
+      ${orphans.map(r=>`
         <div class="aggitem">
           <div class="aggph" data-rejph="${esc(r.key)}">読み込み中…</div>
           <div class="aggname">「${esc(r.label)}」</div>
           <div class="rejmeta">${fmtFull(new Date(r.ngTs||r.ts))} に×</div>
-          <button class="btn danger rejdel" data-key="${esc(r.key)}" style="width:100%;margin-top:4px;padding:7px;font-size:12px;">🗑 削除</button>
+          ${delBtn(`data-key="${esc(r.key)}"`)}
         </div>`).join("")}
     </div>
   </details>`;
 }
-function wireGmRejManage(){
+function wireGmRejManage(name){
   const box=document.getElementById("gmrejbox");
   if(!box) return;
   box.ontoggle=()=>{ gmRejOpen=box.open; if(box.open) loadRejectPhotos(); };
@@ -1469,10 +1521,19 @@ function wireGmRejManage(){
         return;
       }
       bt.disabled=true; bt.textContent="削除中…";
-      const r=(boards["_rejects"]?.list||[]).find(x=>x.key===bt.dataset.key);
-      if(!r){ bt.disabled=false; bt.textContent="🗑 削除"; return; }
-      try{ await store.removeReject(r); }   // 成功すれば再描画で消える
-      catch(e){ bt.disabled=false; bt.dataset.arm=""; bt.textContent="失敗…もう一度"; }
+      try{
+        if(bt.dataset.ngts){
+          // ×記録単位: ログのngエントリ＋（あれば）アーカイブと写真をセットで削除
+          const ngTs=+bt.dataset.ngts, cellId=bt.dataset.cell;
+          const r=rejForNg(name,cellId,ngTs);
+          if(r) await store.removeReject(r);
+          const ev=(boards[name]?.log||[]).find(e=>e.type==="ng"&&e.id===cellId&&e.ts===ngTs);
+          if(ev) await store.removeLogEntry(name,ev);
+        }else{
+          const r=(boards["_rejects"]?.list||[]).find(x=>x.key===bt.dataset.key);
+          if(r) await store.removeReject(r);
+        }
+      }catch(e){ bt.disabled=false; bt.dataset.arm=""; bt.textContent="失敗…もう一度"; }
     };
   });
 }
@@ -1527,7 +1588,7 @@ function myRejUpload(owner, ngEv){
       <p style="font-size:12px;color:var(--muted);line-height:1.7;margin-top:6px;">「${esc(ngEv.label)}」（${fmtFull(new Date(ngEv.ts))} に×）の当時の写真をアップしてね。「みんなの×判定一覧」に載るよ。${cmt0||gmc0?"当時のコメントはきろくから自動で付くよ。":""}</p>
       <input type="file" accept="image/*" id="mrfile" class="hidden">
       <img class="preview hidden" id="mrpv">
-      ${cmt0?`<div class="pcomment">💬 ${nameHtml(owner)}： ${esc(cmt0)}</div>`:""}
+      ${cmt0?`<div class="pcomment ${pcClass(owner)}">💬 ${nameHtml(owner)}： ${esc(cmt0)}</div>`:""}
       ${gmc0?`<div class="pcomment gm">🔑 ゲームマスター： ${esc(gmc0)}</div>`:""}
       <div class="mbtns">
         <button class="btn primary" id="mrpick">📷 写真を選ぶ</button>
@@ -1687,7 +1748,7 @@ function viewSquare(name,id){
       <div class="center"><span class="cattag" style="background:${cat.bg};color:${cat.tx};">${cat.name}</span></div>
       <div class="vwho">📸 ${nameHtml(name)} の写真</div>
       <img class="preview" id="vpv">
-      ${comment?`<div class="pcomment">💬 ${nameHtml(name)}： ${esc(comment)}</div>`:""}
+      ${comment?`<div class="pcomment ${pcClass(name)}">💬 ${nameHtml(name)}： ${esc(comment)}</div>`:""}
       ${gmComment?`<div class="pcomment gm">🔑 ゲームマスター： ${esc(gmComment)}</div>`:""}
       <div class="mbtns"><button class="btn plain" id="vclose">閉じる</button></div>
     </div>`;
@@ -1823,7 +1884,7 @@ function renderGM(){
         const ngc=Object.keys(b.ng||{}).filter(id=>(b.filled||{})[id]).length;
         const pend=Math.max(0, raw-okc-ngc);
         return `<div class="rankrow">
-          <span class="nm">${n}
+          <span class="nm">${nameHtml(n)}
             <div class="detail">パスワード: <b>${b.pass?esc(b.pass):"（まだ未設定）"}</b> ・ ${s.score}点<br>
             写真${raw}枚（<span style="color:#2F9E63;font-weight:900;">〇${okc}</span> ・ <span style="color:#C22B2B;font-weight:900;">×${ngc}</span> ・ <span style="color:#9A6B00;font-weight:900;">未チェック${pend}</span>）</div>
           </span>
@@ -1881,13 +1942,13 @@ async function renderGMBoard(name){
     </div></div>${legendHtml()}
     <div class="marklegend"><span style="color:#2F9E63;font-weight:700;">⭕＝チェックOK</span> ・ <span style="color:#C22B2B;font-weight:700;">❌＝要撮り直し</span> ・ <span style="color:#9A6B00;font-weight:700;">印なし＝チェック待ち</span></div></div>
     ${gmRejManageHtml(name)}
-    ${histHtml(b)}
+    ${histHtml(b, name)}
     ${topicsHtml(b)}
     <div class="loading" id="pl">写真を読み込み中…</div>`;
   const bs=app.querySelector(".boardscroll"); if(bs&&sc) bs.scrollLeft=sc;
   if(topicsOpen){ const tp=app.querySelector("details.topics"); if(tp) tp.open=true; }
   if(histOpen){ const hb=app.querySelector("details.histd:not(#gmrejbox)"); if(hb) hb.open=true; }
-  wireGmRejManage();
+  wireGmRejManage(name);
   document.getElementById("gback").onclick=()=>{ view="gm"; render(); };
   document.getElementById("greload").onclick=()=>{
     Object.keys(gmPhotos).forEach(k=>{ if(k.startsWith(name+"_")) delete gmPhotos[k]; });
@@ -1938,7 +1999,7 @@ function renderDemoBoard(){
       <div class="scoredetail">マス ${filledCount}点 ＋ FREE 4点 ＋ ライン${lines}本×2点</div>
       ${stageHtml(score)}
     </div>
-    ${histHtml(b)}
+    ${histHtml(b, DEMO_NAME)}
     ${topicsHtml(b)}`;
   const bs=app.querySelector(".boardscroll"); if(bs&&sc) bs.scrollLeft=sc;
   if(topicsOpen){ const tp=app.querySelector("details.topics"); if(tp) tp.open=true; }
@@ -1973,7 +2034,7 @@ async function gmSquare(name,id){
         ${!isOk&&!isNg?`<span class="cattag" style="background:#FFF1CC;color:#9A6B00;">チェック待ち</span>`:""}
       </div>
       <img class="preview" id="gpv">
-      ${comment?`<div class="pcomment">💬 ${name===DEMO_NAME?"🧪 お試し":nameHtml(name)}： ${esc(comment)}</div>`:""}
+      ${comment?`<div class="pcomment ${name===DEMO_NAME?"":pcClass(name)}">💬 ${name===DEMO_NAME?"🧪 お試し":nameHtml(name)}： ${esc(comment)}</div>`:""}
       <textarea class="cmtbox" id="gcmt" maxlength="100" rows="2"
         placeholder="🔑 GMからのコメント（本人のマスに表示されるよ。×の理由などに）">${esc(gmC0)}</textarea>
       <div class="mbtns" id="gbtnarea">
