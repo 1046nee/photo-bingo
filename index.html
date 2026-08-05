@@ -1155,7 +1155,8 @@ function rejectsHtml(){
         <div class="aggitem">
           <div class="aggph" id="rej-${esc(r.key)}">読み込み中…</div>
           <div class="aggname">${nameHtml(r.name)}「${esc(r.label)}」</div>
-          <div class="rejmeta">${fmtFull(new Date(r.ts))}${r.manual?"・GM登録":""}</div>
+          <div class="rejmeta">${fmtFull(new Date(r.ngTs||r.ts))} に×${r.manual?"・GM登録":""}</div>
+          ${r.cmt?`<div class="rejmeta"><span class="ct-me">💬 ${esc(r.cmt)}</span></div>`:""}
           ${r.note?`<div class="rejmeta"><span class="ct-gm">🔑 ${esc(r.note)}</span></div>`:""}
         </div>`).join("")}
     </div>
@@ -1638,7 +1639,9 @@ async function gmSquare(name,id){
     if(!img) return;
     const key=`reject_${name}_${id}_${Date.now()}`;
     await store.saveRejectPhoto(key,img);
-    await store.addReject({key,name,cellId:id,label,ts:Date.now(),photoTs:pTs,manual:false,note:q("#gcmt").value.trim()||""});
+    await store.addReject({key,name,cellId:id,label,ts:Date.now(),photoTs:pTs,manual:false,
+      cmt:boards[name]?.comments?.[id]||"",   // ×当時の本人コメントも残す
+      note:q("#gcmt").value.trim()||""});
   };
   const judge=async(verdict,type)=>{
     try{
@@ -1679,17 +1682,23 @@ async function gmSquare(name,id){
 /* ---------- GM用: 昔の×写真（スクショ）を却下アーカイブに登録するモーダル ----------
    撮り直しで消えた×写真を、GMが手元のスクショから登録できる（「GM登録」印つきで却下集に載る） */
 function rejUploadModal(){
+  // GMが×判定を下した記録（だれの・どのお題か）だけを選択肢にする
+  const ngEvents=[];
+  MEMBERS.forEach(n=>(boards[n]?.log||[]).forEach(e=>{
+    if(e.type==="ng") ngEvents.push({name:n, cellId:e.id, label:e.label, ts:e.ts});
+  }));
+  ngEvents.sort((a,b)=>b.ts-a.ts);
   const ov=document.createElement("div");
   ov.className="overlay";
   ov.innerHTML=`
     <div class="modal">
       <h3>❌ 昔の×写真を登録</h3>
-      <p style="font-size:12px;color:var(--muted);line-height:1.7;margin-top:6px;">撮り直しで消えた×写真のスクショを「却下された回答集」に登録できるよ。だれの・どのお題かを選んでね。</p>
-      <select class="cmtbox" id="rjname">${MEMBERS.map(n=>`<option value="${n}">${n}</option>`).join("")}</select>
-      <select class="cmtbox" id="rjcell">${Object.entries(CATS).map(([k,c])=>
-        `<optgroup label="${c.name}">${CELLS.filter(x=>x.cat===k).map(x=>`<option value="${x.id}">${x.label.replace(/\n/g,"")}</option>`).join("")}</optgroup>`).join("")}</select>
+      ${ngEvents.length?`
+      <p style="font-size:12px;color:var(--muted);line-height:1.7;margin-top:6px;">GMが<b>×判定をした記録</b>から選んでね。撮り直しで消えた写真のスクショを「却下された回答集」に登録できるよ。当時のコメントは記録から自動で入るよ（書き直してもOK）。</p>
+      <select class="cmtbox" id="rjsel">${ngEvents.map((ev,i)=>`<option value="${i}">${ev.name}「${esc(ev.label)}」（${fmtFull(new Date(ev.ts))} に×）</option>`).join("")}</select>
       <input type="file" accept="image/*" id="rjfile" class="hidden">
       <img class="preview hidden" id="rjpv">
+      <textarea class="cmtbox" id="rjcmt" maxlength="100" rows="2" placeholder="💬 当時の本人コメント（なくてもOK）"></textarea>
       <textarea class="cmtbox" id="rjnote" maxlength="100" rows="2" placeholder="🔑 GMコメント（なぜ×だったか・なくてもOK）"></textarea>
       <div class="mbtns">
         <button class="btn primary" id="rjpick">📷 スクショを選ぶ</button>
@@ -1697,9 +1706,30 @@ function rejUploadModal(){
         <button class="btn plain" id="rjclose">閉じる</button>
       </div>
       <div class="notice err hidden" id="rjerr"></div>
+      `:`
+      <p style="font-size:13px;text-align:center;line-height:1.9;margin-top:12px;">×判定の記録がまだないよ。<br><span style="font-size:11.5px;color:var(--muted);">ここには、GMが×にした「人とお題」のセットだけが出るよ。</span></p>
+      <div class="mbtns"><button class="btn plain" id="rjclose">閉じる</button></div>`}
     </div>`;
   document.body.appendChild(ov);
   const q2=s=>ov.querySelector(s);
+  q2("#rjclose").onclick=()=>ov.remove();
+  ov.onclick=e=>{ if(e.target===ov) ov.remove(); };
+  if(!ngEvents.length) return;
+  // 選んだ×記録の「当時の本人コメント」「当時のGMコメント」を履歴ログから復元して自動入力
+  const fillCtx=()=>{
+    const ev=ngEvents[+q2("#rjsel").value];
+    const log=boards[ev.name]?.log||[];
+    let cmt="", gmc="";
+    for(const e of log){
+      if(e.id!==ev.cellId) continue;
+      if(e.ts<=ev.ts && (e.type==="up"||e.type==="reup"||e.type==="cmt")) cmt=e.text||"";
+      if(e.ts<=ev.ts+60000 && e.type==="gmcmt") gmc=e.text||"";   // 判定と同時保存分も拾う
+    }
+    q2("#rjcmt").value=cmt;
+    q2("#rjnote").value=gmc;
+  };
+  q2("#rjsel").onchange=fillCtx;
+  fillCtx();
   let pend=null;
   const showE=t=>{ const e=q2("#rjerr"); e.textContent=t; e.classList.remove("hidden"); };
   q2("#rjpick").onclick=()=>q2("#rjfile").click();
@@ -1719,17 +1749,15 @@ function rejUploadModal(){
     if(!pend) return;
     q2("#rjsave").disabled=true; q2("#rjsave").textContent="登録中…";
     try{
-      const name=q2("#rjname").value;
-      const cellId=q2("#rjcell").value;
-      const label=CELLS.find(c=>c.id===cellId).label.replace(/\n/g,"");
-      const key=`reject_${name}_${cellId}_${Date.now()}`;
+      const ev=ngEvents[+q2("#rjsel").value];
+      const key=`reject_${ev.name}_${ev.cellId}_${Date.now()}`;
       await store.saveRejectPhoto(key,pend);
-      await store.addReject({key,name,cellId,label,ts:Date.now(),photoTs:-1,manual:true,note:q2("#rjnote").value.trim()||""});
+      await store.addReject({key,name:ev.name,cellId:ev.cellId,label:ev.label,ts:Date.now(),
+        ngTs:ev.ts,photoTs:-1,manual:true,
+        cmt:q2("#rjcmt").value.trim()||"",note:q2("#rjnote").value.trim()||""});
       ov.remove();
     }catch(err){ showE("登録に失敗しました: "+err.message); q2("#rjsave").disabled=false; q2("#rjsave").textContent="この写真で登録する"; }
   };
-  q2("#rjclose").onclick=()=>ov.remove();
-  ov.onclick=e=>{ if(e.target===ov) ov.remove(); };
 }
 
 /* ---------- ブラウザ/スマホの「戻る・進む」対応 ----------
