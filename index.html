@@ -139,6 +139,16 @@ button{font-family:inherit;cursor:pointer;}
   display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:11px;}
 .aggph img{width:100%;height:100%;object-fit:cover;}
 .aggname{text-align:center;font-size:12px;font-weight:700;margin-top:2px;}
+/* 名前の男女色（結果発表まわり。名前選択ボタンと同じ青/赤） */
+.nm-boy{color:#2E63B0;}
+.nm-girl{color:#C23A3A;}
+.vwho{text-align:center;font-size:13px;font-weight:900;margin-top:6px;}
+/* あそびかたの色付き強調 */
+.rules .hlp{color:var(--purple);}
+.rules .hlk{color:#C75BAB;}
+.rules .hlg{color:#2F9E63;}
+.rules .hlo{color:#C86A15;}
+.rules .hlr{color:#C22B2B;}
 .aggnot{margin-top:10px;background:#F1EFE8;border-radius:10px;padding:8px 10px;
   font-size:12px;color:#5F5E5A;line-height:1.6;}
 h2.sec{font-size:16px;font-weight:900;color:var(--purple);margin-top:18px;
@@ -566,6 +576,7 @@ const gmPhotos={};      // "名前_マスID" -> {ts, img}（GM・閲覧用キャ
 const DEMO_NAME="_demo";   // GM練習用お試しボードの保存名（MEMBERSに無いのでランキング対象外）
 const demoPhotos={};       // お試しボードの写真キャッシュ
 const dispName=n=>n===DEMO_NAME?"🧪 お試し":n;
+const nameHtml=n=>`<span class="${MALE_MEMBERS.has(n)?"nm-boy":"nm-girl"}">${esc(n)}</span>`;   // 名前を男女色（青/赤）で表示
 let renderGen=0;        // 描画の世代番号（再描画時に古い写真読み込みループを止める）
 let view="board";       // board | results | player:名前 | pass | gm | gmplayer:名前 | gmdemo
 let lastHistKey=null;   // ブラウザ履歴に記録済みの画面（view|名前）。同じ画面の重複pushを防ぐ
@@ -708,16 +719,16 @@ function renderPass(){
 function rulesHtml(){
   return `<div class="rules">
     <h3>🧠 これはドパガキ治療プログラムです</h3>
-    <p style="margin-bottom:10px;">スマホが手放せない、ショート動画を無限に見ちゃう……そんな<b>ドパガキ</b>を卒業するためのビンゴだよ。お題はぜんぶ<b>スクリーンの外の世界</b>にあるもの。画面から顔を上げて、外の世界をじっくり眺めて探してみてね🌈</p>
+    <p style="margin-bottom:10px;">スマホが手放せない、ショート動画を無限に見ちゃう……そんな<b class="hlk">ドパガキ</b>を卒業するためのビンゴだよ。お題はぜんぶ<b class="hlg">スクリーンの外の世界</b>にあるもの。画面から顔を上げて、外の世界をじっくり眺めて探してみてね🌈</p>
     <h3>📖 あそびかた</h3>
     <ol>
-      <li>名前を選んでパスワードを入れる</li>
-      <li>ビンゴのマスにお題に合う写真をアップロード！（💬ひとことコメントも書けるよ）</li>
-      <li>ビンゴを埋めて目指せ<b>100点</b>！</li>
-      <li>写真はゲームマスターがチェックするよ！</li>
-      <li><b>${fmt(RESULTS_AT)} に結果発表</b>！みんなの順位とビンゴが見られるようになるよ🎉</li>
+      <li><b class="hlp">名前</b>を選んで<b class="hlp">パスワード</b>を入れる</li>
+      <li>ビンゴのマスに<b class="hlg">お題に合う写真</b>をアップロード！（💬ひとことコメントも書けるよ）</li>
+      <li>ビンゴを埋めて目指せ<b class="hlk">100点</b>！</li>
+      <li>写真は<b class="hlo">ゲームマスター</b>がチェックするよ！</li>
+      <li><b class="hlp">${fmt(RESULTS_AT)} に結果発表</b>！みんなの順位とビンゴが見られるようになるよ🎉</li>
     </ol>
-    <div class="prize">🏆 1位には<b>お祝いの賞金</b>をプレゼント！<br>😈 ドパガキを卒業できなかった人には<span style="display:inline-block;"><b>罰ゲーム</b>！</span></div>
+    <div class="prize">🏆 1位には<b class="hlo">お祝いの賞金</b>をプレゼント！<br>😈 ドパガキを卒業できなかった人には<span style="display:inline-block;"><b class="hlr">罰ゲーム</b>！</span></div>
   </div>`;
 }
 
@@ -1077,7 +1088,10 @@ function renderRevealed(isGm){
   rows.forEach((r,i)=>{ r.rank = (i>0 && r.score===rows[i-1].score) ? rows[i-1].rank : i+1; });
   const medal={1:"🥇",2:"🥈",3:"🥉"};
   // 下位3人に😈（DEVIL_EXEMPTは免除し、その人を除いた下から3人に付ける）
-  const devils=new Set(rows.filter(r=>r.name!==DEVIL_EXEMPT).slice(-3).map(r=>r.name));
+  // 同率対応: 下から3人の誰かと同じ順位の人にも付ける（同じ順位なのに😈の有無が分かれないように）
+  const eligible=rows.filter(r=>r.name!==DEVIL_EXEMPT);
+  const devilRanks=new Set(eligible.slice(-3).map(r=>r.rank));
+  const devils=new Set(eligible.filter(r=>devilRanks.has(r.rank)).map(r=>r.name));
   // 集計ビンゴ: 各お題に写真をアップした人数
   const aggCounts={};
   CELLS.forEach(c=>{ aggCounts[c.id]=MEMBERS.filter(n=>boards[n]?.filled?.[c.id]).length; });
@@ -1099,7 +1113,7 @@ function renderRevealed(isGm){
         return `
         <div class="rankrow clickable" data-n="${r.name}" role="button" tabindex="0">
           <span class="pos">${r.rank}</span>
-          <span class="nm">${r.name}<div class="detail">${r.filledCount}マス×1点＋ライン${r.lines}本×2点＋FREE4マス×1点</div></span>
+          <span class="nm">${nameHtml(r.name)}<div class="detail">${r.filledCount}マス×1点＋ライン${r.lines}本×2点＋FREE4マス×1点</div></span>
           <span class="score">${marks?marks+" ":""}${r.score}<small>点</small></span>
         </div>`;
       }).join("")}
@@ -1137,6 +1151,7 @@ function viewSquare(name,id){
     <div class="modal">
       <h3>${label}</h3>
       <div class="center"><span class="cattag" style="background:${cat.bg};color:${cat.tx};">${cat.name}</span></div>
+      <div class="vwho">📸 ${nameHtml(name)} の写真</div>
       <img class="preview" id="vpv">
       ${comment?`<div class="pcomment">💬 ${esc(comment)}</div>`:""}
       ${gmComment?`<div class="pcomment gm">🔑 GMより: ${esc(gmComment)}</div>`:""}
@@ -1170,10 +1185,10 @@ async function aggSquare(id){
       </div>
       ${who.length?`<div class="agggrid">
         ${who.map(n=>`<div class="aggitem" data-n="${n}" role="button" tabindex="0">
-          <div class="aggph">読み込み中…</div><div class="aggname">${n}</div>
+          <div class="aggph">読み込み中…</div><div class="aggname">${nameHtml(n)}</div>
         </div>`).join("")}
       </div>`:`<p style="text-align:center;font-size:13px;color:var(--muted);margin-top:14px;">まだ誰も撮っていないお題だよ</p>`}
-      ${not.length?`<div class="aggnot">まだの人: ${not.join("・")}</div>`:""}
+      ${not.length?`<div class="aggnot">まだの人: ${not.map(n=>nameHtml(n)).join("・")}</div>`:""}
       <div class="mbtns"><button class="btn plain" id="aclose">閉じる</button></div>
     </div>`;
   document.body.appendChild(ov);
@@ -1203,7 +1218,7 @@ async function renderPlayerBoard(name){
   const sc=app.querySelector(".boardscroll")?.scrollLeft ?? 0;
   app.innerHTML=`
     <div class="statusbar">
-      <span class="who">${name}</span>
+      <span class="who">${nameHtml(name)}</span>
       <span class="cnt"><b>${filledCount}</b>マス ・ ライン${lines}本 ・ <b>${score}</b>点</span>
     </div>
     <div class="card"><div class="boardscroll"><div class="bgrid" id="pgrid">
