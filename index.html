@@ -49,6 +49,13 @@ button{font-family:inherit;cursor:pointer;}
   border-radius:14px;pointer-events:none;}
 .boardscroll{overflow-x:auto;-webkit-overflow-scrolling:touch;}
 .bgrid{display:grid;grid-template-columns:repeat(8,1fr);gap:2px;}
+.bgrid.g10{grid-template-columns:repeat(10,1fr);}          /* 10×10 拡張後 */
+.bgrid.g10 .bc{font-size:6px;line-height:1.2;padding:1px;} /* マスが小さくなるぶん文字も縮める */
+.bgrid.g10 .hole span{font-size:6px;letter-spacing:0;}
+.bgrid.g10 .done{width:9px;height:9px;font-size:7px;}
+.bgrid.g10 .okmark{width:10px;height:10px;font-size:7px;}
+.bgrid.g10 .ngmark{font-size:20px;}
+.bgrid.g10 .aggnum{min-width:11px;height:11px;font-size:8px;}
 .bc{aspect-ratio:1;border-radius:5px;display:flex;align-items:center;justify-content:center;
   text-align:center;font-size:7px;line-height:1.25;padding:1.5px;overflow:hidden;
   word-break:break-all;border:1px solid rgba(44,44,42,.10);position:relative;font-weight:500;}
@@ -180,6 +187,19 @@ button{font-family:inherit;cursor:pointer;}
 .tlph{border-radius:10px;overflow:hidden;background:#EDEAE0;min-height:90px;cursor:pointer;
   display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:12px;}
 .tlph img{width:100%;display:block;}
+/* ---------- 10×10リニューアルのバナー ---------- */
+.expandbanner{margin-top:10px;border-radius:14px;padding:14px;line-height:1.7;position:relative;}
+.expandbanner.soon{background:var(--paper);border:2.5px dashed #C75BAB;}
+.expandbanner.done{background:linear-gradient(135deg,#5B4BC4 0%,#9B5BC9 55%,#C75BAB 100%);
+  color:#fff;box-shadow:0 4px 14px rgba(91,75,196,.35);}
+.expandbanner .ebbadge{position:absolute;top:-9px;right:12px;background:#F5B93A;color:#5A3E00;
+  font-size:10px;font-weight:900;letter-spacing:2px;border-radius:999px;padding:2px 10px;
+  box-shadow:0 2px 5px rgba(0,0,0,.2);}
+.expandbanner .ebttl{font-weight:900;font-size:15px;}
+.expandbanner.soon .ebttl{color:#C75BAB;}
+.expandbanner .ebtxt{font-size:12.5px;margin-top:4px;}
+.expandbanner .ebtxt span{font-size:11px;opacity:.92;}
+.expandbanner.done .btn.ghost{border-color:#fff;color:#fff;width:100%;}
 /* 名前の男女色（結果発表まわり。名前選択ボタンと同じ青/赤） */
 .nm-boy{color:#2E63B0;}
 .nm-girl{color:#C23A3A;}
@@ -340,6 +360,13 @@ h2.sec{font-size:16px;font-weight:900;color:var(--purple);margin-top:18px;
   .hole span{font-size:12px;}
   .okmark{width:16px;height:16px;font-size:10px;}
   .ngmark{font-size:36px;}
+  /* 10×10でもPCならマスが十分大きいので、少しだけ縮める程度に戻す */
+  .bgrid.g10 .bc{font-size:10px;line-height:1.25;padding:2px;}
+  .bgrid.g10 .hole span{font-size:10px;}
+  .bgrid.g10 .done{width:13px;height:13px;font-size:9px;}
+  .bgrid.g10 .okmark{width:14px;height:14px;font-size:9px;}
+  .bgrid.g10 .ngmark{font-size:28px;}
+  .bgrid.g10 .aggnum{min-width:15px;height:15px;font-size:10px;}
   .lg{font-size:10.5px;gap:5px 12px;margin-top:10px;}
   .marklegend{font-size:10.5px;margin-top:8px;}
   .aggnum{min-width:17px;height:17px;border-radius:9px;font-size:11px;}
@@ -355,7 +382,7 @@ h2.sec{font-size:16px;font-weight:900;color:var(--purple);margin-top:18px;
   <div class="hd">
     <div class="deco">💊 ドパガキ治療プログラム 💊</div>
     <h1>👦 ドパガキ卒業フォトビンゴ 👧</h1>
-    <div class="sub" id="subline">スクリーンの時間を減らして、外の世界をじっくり眺めよう｜満点100点</div>
+    <div class="sub" id="subline">スクリーンの時間を減らして、外の世界をじっくり眺めよう</div>
     <div class="hdhome">🏠 ここをタップでホームへ</div>
   </div>
   <div id="app"><div class="loading">読み込み中…</div></div>
@@ -388,6 +415,11 @@ const DEVIL_EXEMPT = "あずみん";
 // ①-5 順位ヒント（自分の順位が奇数か偶数かだけ見られる）の公開期限。
 //     この日時を過ぎると奇数/偶数もわからなくなる（発表まで完全シークレット）
 const PARITY_UNTIL = new Date("2026-08-10T00:00:00+09:00");   // 8/9 いっぱいまで
+
+// ①-6 盤面拡張の日時（この日時を過ぎるとビンゴが 8×8 → 10×10 になり、外周36マスが解放される）
+//      ※この時刻をまたぐと、開いている画面も自動で切り替わる（リロード不要）
+//      ※先に確認したいときは URL に ?expand=1 を付ける
+const EXPAND_AT = new Date("2026-08-10T12:00:00+09:00");
 
 // ② 結果発表日時（この日時を過ぎると全員のビンゴと点数が見られる。UIの発表日時表示もここから出る）
 const RESULTS_AT = new Date("2026-08-12T12:00:00+09:00");
@@ -427,11 +459,130 @@ const GRID = [
   [["fr","FREE"],["ot","お地蔵さん"],["nt","砂浜のある海"],["pp","ファミマの靴下\n履いてる人"],["ch","サンリオ"],["fd","トリュフ味の\nお菓子"],["it","VRゴーグル"],["fr","FREE"]],
 ];
 
-const CELLS = [];
+/* ===== 10×10 拡張（EXPAND_AT 以降）で外側に1周ぶん足す36マス =====
+   ★★★ 絶対に守ること ★★★
+   ・既存64マスのマスID（r0c0〜r7c7）は「位置」ではなく固定の名前として凍結している。
+     位置から作り直すと、写真・〇×判定・履歴・×アーカイブが全部1マスずつズレて
+     「別のお題の場所に正しく表示されているように見える」＝誰も気づけない全損になる。
+   ・外周マスのIDは o0〜o35（既存と衝突しない別名前空間）。r{数字}c{数字} 形式は使わないこと。
+   ・並び順: 上辺10 → 各行の左右 → 下辺10（この順にo0から振る）。順番を変えるとIDがズレる。 */
+const RING_TOP = [   // 盤の一番上の行（左→右）
+  ["it","刀"],["ch","恐竜"],["pp","双子"],["fd","生ドーナツ"],["nt","鹿"],
+  ["ot","テスラ"],["it","下駄"],["ch","招き猫"],["pp","DJ"],["fd","ハラル\nフード"],
+];
+const RING_LEFT = [  // 各行の左端（上→下・8コ）
+  ["nt","ハト"],["ot","AED"],["it","バケツ\nハット"],["ch","ご当地\nゆるキャラ"],
+  ["pp","白衣の人"],["fd","星型のピノ"],["nt","シーズー"],["ot","ご当地\nマンホール"],
+];
+const RING_RIGHT = [ // 各行の右端（上→下・8コ）
+  ["it","ルービック\nキューブ"],["ch","ガチャの\n景品"],["pp","フレネミー"],["fd","もっちゅりん"],
+  ["nt","中華街"],["ot","食品サンプル"],["it","ダンベル"],["ch","カーネル\nサンダース"],
+];
+const RING_BOTTOM = [// 盤の一番下の行（左→右）
+  ["pp","楽器を\n運ぶ人"],["fd","ドリンク\nバー"],["nt","陸けい砂州"],["ot","ラクロス"],["it","カプセル洗剤"],
+  ["ch","信楽焼の\nたぬき"],["pp","スーツ\nケースの人"],["fd","チャミスル"],["nt","図書館"],["ot","紙コップの\nディスペンサー"],
+];
+
+/* --- 8×8（拡張前）の盤 --- */
+const CELLS_8 = [];
 GRID.forEach((row,r)=>row.forEach(([cat,label],c)=>{
-  CELLS.push({id:`r${r}c${c}`, r, c, cat, label});
+  CELLS_8.push({id:`r${r}c${c}`, r, c, cat, label});
 }));
-const FREE_IDS = new Set(CELLS.filter(x=>x.cat==="fr").map(x=>x.id));
+const FREE_8 = new Set(CELLS_8.filter(x=>x.cat==="fr").map(x=>x.id));
+
+/* --- 10×10（拡張後）の盤：既存GRIDには一切触らず、外周を合成する --- */
+const N10 = 10;
+const CELLS_10 = [];
+let _oi = 0;
+const _put = (pair, id, r, c) => CELLS_10.push({id, r, c, cat:pair[0], label:pair[1]});
+RING_TOP.forEach((p,c)=>_put(p, `o${_oi++}`, 0, c));
+GRID.forEach((row,i)=>{
+  _put(RING_LEFT[i], `o${_oi++}`, i+1, 0);
+  row.forEach((pair,j)=>_put(pair, `r${i}c${j}`, i+1, j+1));   // ★既存IDを据え置き
+  _put(RING_RIGHT[i], `o${_oi++}`, i+1, N10-1);
+});
+RING_BOTTOM.forEach((p,c)=>_put(p, `o${_oi++}`, N10-1, c));
+const FREE_10 = new Set(CELLS_10.filter(x=>x.cat==="fr").map(x=>x.id));
+
+// 位置→ID の索引表（座標とIDをつなぐ唯一の場所。ライン定義はここから作る）
+const ID_AT = Array.from({length:N10}, ()=>Array(N10));
+CELLS_10.forEach(c=>{ ID_AT[c.r][c.c] = c.id; });
+
+/* --- ライン定義（点数と金色演出はこの1箇所だけを見る） --- */
+const _mkInnerLines = ()=>{
+  const L=[];
+  for(let r=0;r<8;r++) L.push([...Array(8)].map((_,c)=>`r${r}c${c}`));
+  for(let c=0;c<8;c++) L.push([...Array(8)].map((_,r)=>`r${r}c${c}`));
+  L.push([...Array(8)].map((_,i)=>`r${i}c${i}`));
+  L.push([...Array(8)].map((_,i)=>`r${i}c${7-i}`));
+  return L;   // 18本
+};
+const LINES_8 = _mkInnerLines();
+// 拡張後は「内側18本を据え置き（＝いま完成しているラインは絶対に消えない）」＋「外周の4辺」を追加
+const LINES_10 = [
+  ..._mkInnerLines(),
+  [...Array(N10)].map((_,c)=>ID_AT[0][c]),        // 上辺
+  [...Array(N10)].map((_,c)=>ID_AT[N10-1][c]),    // 下辺
+  [...Array(N10)].map((_,r)=>ID_AT[r][0]),        // 左辺
+  [...Array(N10)].map((_,r)=>ID_AT[r][N10-1]),    // 右辺
+];   // 22本
+
+/* --- ステージ（拡張で満点が変わるので2種類持つ。既存8段は絶対に動かさない） --- */
+const STAGES_8=[
+  {min:0,  name:"ステージ1", emoji:"🌱"},
+  {min:10, name:"ステージ2", emoji:"🌿"},
+  {min:15, name:"ステージ3", emoji:"🌳"},
+  {min:20, name:"ステージ4", emoji:"⭐"},
+  {min:30, name:"ステージ5", emoji:"🌟"},
+  {min:45, name:"ステージ6", emoji:"🔥"},
+  {min:60, name:"ステージ7", emoji:"💎"},
+  {min:80, name:"ステージ8", emoji:"👑"},
+  {min:100,name:"ドパガキ完全卒業", emoji:"🏆"},
+];
+const STAGES_10=[
+  ...STAGES_8.slice(0,8),                                  // 0〜80点は据え置き（降格させない）
+  {min:100, name:"ステージ9",  emoji:"🏆"},
+  {min:120, name:"ステージ10", emoji:"🚀"},
+  {min:144, name:"ドパガキ完全卒業", emoji:"🎓"},
+];
+
+/* --- いまどちらの盤かを決める（EXPAND_AT を過ぎたら10×10） --- */
+const expandParam = new URLSearchParams(location.search).get("expand")==="1";   // ?expand=1 で先行プレビュー
+const isExpanded = () => new Date() >= EXPAND_AT || expandParam;
+
+// 盤に依存する値はすべてここで切り替える（描画のたびに呼ぶので、時刻が来れば自動で切り替わる）
+let CELLS, FREE_IDS, LINES, BOARD_N, TOTAL_TOPICS, MAX_SCORE, STAGES, EXPANDED;
+function applyBoardMode(){
+  EXPANDED = isExpanded();
+  CELLS   = EXPANDED ? CELLS_10 : CELLS_8;
+  FREE_IDS= EXPANDED ? FREE_10  : FREE_8;
+  LINES   = EXPANDED ? LINES_10 : LINES_8;
+  STAGES  = EXPANDED ? STAGES_10 : STAGES_8;
+  BOARD_N = EXPANDED ? 10 : 8;
+  TOTAL_TOPICS = CELLS.length - FREE_IDS.size;              // 60 → 96
+  MAX_SCORE = TOTAL_TOPICS + FREE_IDS.size + LINES.length*2; // 100 → 144
+}
+applyBoardMode();
+
+/* --- 起動時アサーション（合成ミスを必ず検知する） --- */
+(()=>{
+  const errs=[];
+  if(CELLS_10.length!==100) errs.push(`10×10のマス数が${CELLS_10.length}（期待100）`);
+  const ids=CELLS_10.map(c=>c.id);
+  if(new Set(ids).size!==ids.length) errs.push("マスIDに重複あり");
+  // ID集合が「既存64（r0c0〜r7c7）＋外周36（o0〜o35）」に完全一致することを検査
+  // （衝突しないr形式ID（r8c0等）が外周に紛れ込む事故もここで検知する）
+  if(ids.filter(id=>/^o\d+$/.test(id)).length!==36) errs.push("外周IDがo形式36個でない");
+  if(ids.some(id=>!/^o\d+$/.test(id) && !/^r[0-7]c[0-7]$/.test(id))) errs.push("想定外の形式のIDがある");
+  for(let r=0;r<N10;r++) for(let c=0;c<N10;c++) if(!ID_AT[r][c]) errs.push(`索引表に穴 (${r},${c})`);
+  GRID.forEach((row,i)=>row.forEach(([cat,label],j)=>{
+    const f=CELLS_10.find(c=>c.id===`r${i}c${j}`);
+    if(!f) errs.push(`既存マス r${i}c${j} が消えた`);
+    else if(f.label!==label||f.cat!==cat) errs.push(`既存マス r${i}c${j} の中身が変わった`);
+  }));
+  if(LINES_10.length!==22) errs.push(`ライン数が${LINES_10.length}（期待22）`);
+  if(errs.length) console.error("【盤面アサーション失敗】", errs);
+})();
 
 /* ---------- ストレージ層（Firebase or お試しローカル） ---------- */
 let store;
@@ -586,25 +737,11 @@ function calcScore(filled, ng){
   const has = id => FREE_IDS.has(id) || (!!filled[id] && !ng[id]);
   const n = Object.keys(filled).filter(id=>!FREE_IDS.has(id) && !ng[id]).length;
   let lines=0;
-  for(let r=0;r<8;r++){ if([...Array(8)].every((_,c)=>has(`r${r}c${c}`))) lines++; }
-  for(let c=0;c<8;c++){ if([...Array(8)].every((_,r)=>has(`r${r}c${c}`))) lines++; }
-  if([...Array(8)].every((_,i)=>has(`r${i}c${i}`))) lines++;
-  if([...Array(8)].every((_,i)=>has(`r${i}c${7-i}`))) lines++;
-  return { filledCount:n, lines, score: n + 4 + lines*2 };
+  for(const ids of LINES){ if(ids.every(has)) lines++; }   // ライン定義はLINESの1箇所だけ
+  return { filledCount:n, lines, score: n + FREE_IDS.size + lines*2 };
 }
 
-/* ---------- ステージ（点数で上がる。10点=2、15点=3、20点=4…最後は100点） ---------- */
-const STAGES=[
-  {min:0,  name:"ステージ1", emoji:"🌱"},
-  {min:10, name:"ステージ2", emoji:"🌿"},
-  {min:15, name:"ステージ3", emoji:"🌳"},
-  {min:20, name:"ステージ4", emoji:"⭐"},
-  {min:30, name:"ステージ5", emoji:"🌟"},
-  {min:45, name:"ステージ6", emoji:"🔥"},
-  {min:60, name:"ステージ7", emoji:"💎"},
-  {min:80, name:"ステージ8", emoji:"👑"},
-  {min:100,name:"ドパガキ完全卒業", emoji:"🏆"},
-];
+/* ---------- ステージ（点数で上がる。中身は STAGES_8 / STAGES_10 で定義済み） ---------- */
 function stageOf(score){ let s=0; STAGES.forEach((st,i)=>{ if(score>=st.min) s=i; }); return s; }
 
 // 点数ボックスに出すステージ表示（バッジ＋つぎのステージまでのミニバー）
@@ -655,11 +792,7 @@ function litCells(filled, ng){
   filled=filled||{}; ng=ng||{};
   const has = id => FREE_IDS.has(id) || (!!filled[id] && !ng[id]);
   const lit=new Set();
-  const addLine=ids=>{ if(ids.every(has)) ids.forEach(x=>lit.add(x)); };
-  for(let r=0;r<8;r++) addLine([...Array(8)].map((_,c)=>`r${r}c${c}`));
-  for(let c=0;c<8;c++) addLine([...Array(8)].map((_,r)=>`r${r}c${c}`));
-  addLine([...Array(8)].map((_,i)=>`r${i}c${i}`));
-  addLine([...Array(8)].map((_,i)=>`r${i}c${7-i}`));
+  for(const ids of LINES){ if(ids.every(has)) ids.forEach(x=>lit.add(x)); }   // calcScoreと同じLINESを共有
   return lit;
 }
 
@@ -753,6 +886,9 @@ document.getElementById("tab-results").onclick=()=>{ view="results"; render(); }
 /* ---------- 描画 ---------- */
 function render(){
   renderGen++;   // 古い非同期ループはこの番号の変化で自動停止する
+  applyBoardMode();   // 拡張時刻を過ぎていれば、この描画から10×10に切り替わる
+  const sl=document.getElementById("subline");
+  if(sl) sl.textContent=`スクリーンの時間を減らして、外の世界をじっくり眺めよう｜満点${MAX_SCORE}点`;
   // ログイン中でもパスワードが一致しなくなったら（未設定含む）パスワード画面へ
   if(me){
     const p=boards[me]?.pass;
@@ -803,6 +939,7 @@ function renderNamePick(){
   const girls=MEMBERS.filter(n=>!MALE_MEMBERS.has(n));
   app.innerHTML=`
     ${canReveal()?`<button class="resultsbtn" id="seeresults">🎉 結果をみる 🎉</button>`:""}
+    ${expandBannerHtml()}
     <div class="card" style="padding:20px 16px;">
       <p style="text-align:center;font-weight:700;font-size:15px;">あなたの名前を選んでね</p>
       <div class="namegrid">
@@ -827,6 +964,7 @@ function renderNamePick(){
   document.getElementById("rejpage").onclick=()=>{ view="rejects"; render(); window.scrollTo(0,0); };
   const sr=document.getElementById("seeresults");
   if(sr) sr.onclick=()=>{ view="results"; render(); };   // 発表後だけ出るボタン（ログイン不要で結果へ）
+  wireExpandBanner();
 }
 
 /* ---------- パスワード設定・入力 ---------- */
@@ -884,12 +1022,65 @@ function rulesHtml(){
     <ol>
       <li><b class="hlp">名前</b>を選んで<b class="hlp">パスワード</b>を入れる</li>
       <li>ビンゴのマスに<b class="hlg">お題に合う写真</b>をアップロード！（💬ひとことコメントも書けるよ）</li>
-      <li>ビンゴを埋めて目指せ<b class="hlk">100点</b>！</li>
+      <li>ビンゴを埋めて目指せ<b class="hlk">${MAX_SCORE}点</b>！</li>
       <li>写真は<b class="hlo">ゲームマスター</b>がチェックするよ！</li>
+      ${EXPANDED?"":`<li><b class="hlk">${fmt(EXPAND_AT)}</b> にビンゴが<b class="hlk">10×10</b>に大きくなるよ！（お題が36コふえる）</li>`}
       <li><b class="hlp">${fmt(RESULTS_AT)} に結果発表</b>！みんなの順位とビンゴが見られるようになるよ🎉</li>
     </ol>
     <div class="prize">🏆 1位には<b class="hlo">お祝いの賞金</b>をプレゼント！<br>😈 ドパガキを卒業できなかった人には<span style="display:inline-block;"><b class="hlr">罰ゲーム</b>！</span></div>
+    ${scoreRuleHtml()}
   </div>`;
+}
+
+/* ---------- 10×10リニューアルのお知らせ（拡張の前＝予告／後＝お披露目） ----------
+   「見たよ」を端末に覚えさせて、お披露目バナーは最初の3日だけ大きく出す */
+const EXPAND_SEEN_KEY="pbingo_expand_seen";
+function expandBannerHtml(){
+  if(!EXPANDED){
+    // 拡張前：カウントダウン予告
+    const ms=EXPAND_AT-new Date();
+    if(ms>7*24*3600*1000) return "";   // 1週間以上先なら出さない
+    const h=Math.floor(ms/3600000), d=Math.floor(h/24);
+    const left = d>=1 ? `あと${d}日` : (h>=1 ? `あと${h}時間` : `まもなく`);
+    return `<div class="expandbanner soon">
+      <div class="ebttl">🔜 ビンゴがおおきくなるよ</div>
+      <div class="ebtxt"><b>${fmt(EXPAND_AT)}</b>（${left}）に<br>
+        <b>8×8 → 10×10</b>にパワーアップ！<br>
+        <span>新しいお題が36コふえて、満点も144点に。<br>いまのビンゴと点数はそのまま引き継がれるよ👍</span></div>
+    </div>`;
+  }
+  // 拡張後：お披露目（「わかった！」を押した端末には出さない。押していない端末には期限なしで出し続ける）
+  if(localStorage.getItem(EXPAND_SEEN_KEY)) return "";
+  return `<div class="expandbanner done" id="expandbanner">
+    <div class="ebbadge">RENEWAL</div>
+    <div class="ebttl">🎉 ビンゴが 10×10 になりました！</div>
+    <div class="ebtxt">
+      まわりに<b>1周ぶん・36コ</b>の新しいお題が追加されたよ✨<br>
+      <b>満点は144点</b>にアップ！<br>
+      <span>・これまでの写真・点数・そろったラインは<b>そのまま</b>だよ<br>
+      ・外周の<b>上下左右の4辺</b>もラインになったよ（各2点）<br>
+      ・お題一覧の <span class="newbadge">New!</span> が新しいお題だよ</span>
+    </div>
+    <button class="btn ghost" id="ebclose" style="margin-top:10px;padding:8px;font-size:12.5px;">わかった！</button>
+  </div>`;
+}
+function wireExpandBanner(){
+  const b=document.getElementById("ebclose");
+  if(b) b.onclick=()=>{ localStorage.setItem(EXPAND_SEEN_KEY,"1"); document.getElementById("expandbanner")?.remove(); };
+}
+
+/* 得点のしくみ（拡張の前後で中身が変わる） */
+function scoreRuleHtml(){
+  return `<details class="histd" style="margin-top:10px;"><summary>💯 点数のしくみ（満点${MAX_SCORE}点）</summary>
+    <div style="font-size:12px;line-height:1.9;margin-top:4px;">
+      ・写真をアップしたマス … <b>1コ 1点</b>（${TOTAL_TOPICS}コで${TOTAL_TOPICS}点）<br>
+      ・FREEマス … <b>${FREE_IDS.size}点</b>（最初からもらえるよ）<br>
+      ・そろったライン … <b>1本 2点</b>（ぜんぶで${LINES.length}本）<br>
+      ${EXPANDED?`<span style="color:var(--muted);font-size:11px;">ラインは<b>内側8×8のタテ・ヨコ・ナナメ18本</b>＋<b>外周の上下左右4辺</b>の合計22本だよ。<br>外周が増えても、これまでにそろったラインは消えないよ👍</span>`
+                :`<span style="color:var(--muted);font-size:11px;">タテ8・ヨコ8・ナナメ2の合計18本だよ。</span>`}<br>
+      ・❌のマスは点数に入らないよ（撮り直せば戻るよ）
+    </div>
+  </details>`;
 }
 
 function topicsHtml(board){
@@ -901,19 +1092,21 @@ function topicsHtml(board){
     return "wait";                                   // アップ済み・GMチェック待ち
   };
   const badge={wait:`<b class="st stw">確認中</b>`, ok:`<b class="st sto">OK</b>`, ng:`<b class="st stn">要修正</b>`};
-  return `<details class="topics"><summary>📷 写真のお題一覧（全60コ）</summary>
+  const newIds=new Set(EXPANDED?CELLS_10.filter(c=>String(c.id).startsWith("o")).map(c=>c.id):[]);
+  return `<details class="topics"><summary>📷 写真のお題一覧（全${TOTAL_TOPICS}コ）</summary>
     ${board?`<div class="topicnote">アップしたお題に状態が付くよ。<b>印なし＝まだ撮っていないお題</b>だよ</div>`:""}
     ${Object.entries(CATS).map(([k,c])=>{
       const items=CELLS.filter(x=>x.cat===k);
       const done=board?items.filter(x=>board.filled?.[x.id]).length:null;
+      const half=Math.ceil(items.length/2);
       const chip=(x,i)=>{
         const st=state(x.id);
-        return `<span class="chip" style="background:${c.bg};color:${c.tx};"><b>${i+1}.</b> ${x.label.replace(/\n/g,"")}${st?badge[st]:""}</span>`;
+        return `<span class="chip" style="background:${c.bg};color:${c.tx};"><b>${i+1}.</b> ${newIds.has(x.id)?`<span class="newbadge">New!</span>`:""}${x.label.replace(/\n/g,"")}${st?badge[st]:""}</span>`;
       };
       return `<div class="topicgroup"><div class="topichead" style="color:${c.tx};">${c.name}（${board?`${done}/${items.length}コ`:`${items.length}コ`}）</div>
         <div class="chipcols">
-          <div class="chipcol">${items.slice(0,5).map((x,i)=>chip(x,i)).join("")}</div>
-          <div class="chipcol">${items.slice(5).map((x,i)=>chip(x,i+5)).join("")}</div>
+          <div class="chipcol">${items.slice(0,half).map((x,i)=>chip(x,i)).join("")}</div>
+          <div class="chipcol">${items.slice(half).map((x,i)=>chip(x,i+half)).join("")}</div>
         </div></div>`;
     }).join("")}
   </details>`;
@@ -1015,18 +1208,19 @@ function renderBoard(){
   app.innerHTML=`
     <div class="statusbar">
       <span class="who">${nameHtml(me)}</span>
-      <span class="cnt"><b>${filledCount}</b>/60マス ・ <b>${score}</b>点</span>
+      <span class="cnt"><b>${filledCount}</b>/${TOTAL_TOPICS}マス ・ <b>${score}</b>点</span>
     </div>
+    ${expandBannerHtml()}
     ${ngCount?`<div class="notice err">❌ ゲームマスターに×にされたマスが<b>${ngCount}コ</b>あるよ！赤い×のマスをタップして撮り直してね（撮り直すまで点数に入らないよ）</div>`:""}
     <div class="notice">マスをタップして、お題に合う写真をアップロード！💬ひとことコメントも書けるよ。追加・撮り直し・削除はいつでもOK。${store.demo?"<br>※お試しモード動作中":""}</div>
-    <div class="card"><div class="boardscroll"><div class="bgrid">
+    <div class="card"><div class="boardscroll"><div class="bgrid ${EXPANDED?"g10":""}">
       ${CELLS.map(c=>cellHtml(c,myPhotos,filled,true,ng,ok,lit)).join("")}
     </div></div>${legendHtml()}
     <div class="marklegend"><span style="color:#2F9E63;font-weight:700;">⭕＝GMチェックOK</span> ・ <span style="color:#C22B2B;font-weight:700;">❌＝撮り直してね</span> ・ <span style="color:#9A6B00;font-weight:700;">印なし＝チェック待ち</span></div></div>
     <div class="scorebox">
       <div class="scorehead">いまの点数</div>
       <div class="scorenum"><b>${score}</b>点</div>
-      <div class="scoredetail">マス ${filledCount}点 ＋ FREE 4点 ＋ ライン${lines}本×2点${ngCount?"<br>（×のマスは点数に入らないよ）":""}</div>
+      <div class="scoredetail">マス ${filledCount}点 ＋ FREE ${FREE_IDS.size}点 ＋ ライン${lines}本×2点${ngCount?"<br>（×のマスは点数に入らないよ）":""}</div>
       ${stageHtml(score)}
     </div>
     ${myRejHtml(me)}
@@ -1035,6 +1229,7 @@ function renderBoard(){
   const bs=app.querySelector(".boardscroll"); if(bs&&sc) bs.scrollLeft=sc;
   if(topicsOpen){ const tp=app.querySelector("details.topics"); if(tp) tp.open=true; }
   if(histOpen){ const hb=app.querySelector("details.histd:not(#myrejbox)"); if(hb) hb.open=true; }
+  wireExpandBanner();
   // 過去の×になった回答: 開いたら写真ロード、未アップはタップで再アップ、アップ済みはタップで拡大
   backfillRejects([me]);   // 今×中で写真が残っている×記録は自動でアーカイブに取り込む
   const mrb=document.getElementById("myrejbox");
@@ -1044,7 +1239,7 @@ function renderBoard(){
     mrb.querySelectorAll(".rejmissing").forEach(el=>{
       el.onclick=()=>{
         const cellId=el.dataset.cell;
-        const label=CELLS.find(c=>c.id===cellId).label.replace(/\n/g,"");
+        const label=(CELLS.find(c=>c.id===cellId)?.label??el.dataset.label??"（不明なお題）").replace(/\n/g,"");
         myRejUpload(me,{id:cellId,label,ts:+el.dataset.ngts});
       };
     });
@@ -1216,9 +1411,9 @@ function renderResults(){
       const s=calcScore(boards[n]?.filled, boards[n]?.ng);
       return `<div class="rankrow locked">
         <span class="nm">${nameHtml(n)}
-          <div class="progress"><i style="width:${Math.round(s.filledCount/60*100)}%"></i></div>
+          <div class="progress"><i style="width:${Math.round(s.filledCount/TOTAL_TOPICS*100)}%"></i></div>
         </span>
-        <span class="detail"><b>${s.filledCount}</b>/60マス ・ <b>${s.score}</b>点</span>
+        <span class="detail"><b>${s.filledCount}</b>/${TOTAL_TOPICS}マス ・ <b>${s.score}</b>点</span>
       </div>`;
     }).join("");
     // 順位の奇数/偶数ヒント（PARITY_UNTILまで。何位かは教えない）
@@ -1343,7 +1538,7 @@ function renderRejects(){
   app.innerHTML=`
     <h2 class="sec">❌ みんなの×判定一覧</h2>
     <p style="font-size:12px;color:var(--muted);margin-top:6px;line-height:1.7;">ゲームマスターに×にされた回答のアーカイブだよ。<b>数字＝×になった回数</b>。マスをタップすると×になった写真が見られるよ（うすいマス＝×なし）</p>
-    <div class="card"><div class="boardscroll"><div class="bgrid">
+    <div class="card"><div class="boardscroll"><div class="bgrid ${EXPANDED?"g10":""}">
       ${CELLS.map(cell).join("")}
     </div></div>${legendHtml()}</div>
     ${sorted.length?`
@@ -1367,7 +1562,7 @@ function renderRejects(){
 
 /* お題ごとの×回答一覧モーダル（時系列順・写真＋名前＋日時。「まだの人」は出さない） */
 async function rejCellModal(cellId){
-  const cell=CELLS.find(c=>c.id===cellId);
+  const cell=CELLS.find(c=>c.id===cellId)??{cat:"ot",label:"（不明なお題）"};
   const cat=CATS[cell.cat];
   const label=cell.label.replace(/\n/g,"");
   const list=(boards["_rejects"]?.list||[]).filter(r=>r.cellId===cellId)
@@ -1697,7 +1892,7 @@ function renderRevealed(isGm){
         return `
         <div class="rankrow clickable" data-n="${r.name}" role="button" tabindex="0">
           <span class="pos">${r.rank}</span>
-          <span class="nm">${nameHtml(r.name)}<div class="detail">${r.filledCount}マス×1点＋ライン${r.lines}本×2点＋FREE4マス×1点</div></span>
+          <span class="nm">${nameHtml(r.name)}<div class="detail">${r.filledCount}マス×1点＋ライン${r.lines}本×2点＋FREE${FREE_IDS.size}マス×1点</div></span>
           <span class="score">${marks?marks+" ":""}${r.score}<small>点</small></span>
         </div>`;
       }).join("")}
@@ -1706,7 +1901,7 @@ function renderRevealed(isGm){
     ${summaryTableHtml(rows)}
     <h2 class="sec">🧩 みんなの集計ビンゴ</h2>
     <p style="font-size:12px;color:var(--muted);margin-top:6px;line-height:1.7;">全員のビンゴを重ね合わせた盤面だよ。<b>数字＝写真をアップした人数</b>。マスをタップするとみんなの写真が見られるよ（うすいマス＝まだ誰も撮っていないお題）</p>
-    <div class="card"><div class="boardscroll"><div class="bgrid">
+    <div class="card"><div class="boardscroll"><div class="bgrid ${EXPANDED?"g10":""}">
       ${CELLS.map(aggCell).join("")}
     </div></div>${legendHtml()}</div>
     ${isGm?`<div class="divider"></div><div class="mbtns"><button class="btn back" id="gmresback">← GM画面にもどる</button></div>`
@@ -1735,7 +1930,7 @@ function renderRevealed(isGm){
 
 /* ---------- 閲覧用モーダル（発表後のみんなのビンゴで写真とコメントを拡大表示） ---------- */
 function viewSquare(name,id){
-  const cell=CELLS.find(c=>c.id===id);
+  const cell=CELLS.find(c=>c.id===id)??{cat:"ot",label:"（不明なお題）"};
   const cat=CATS[cell.cat];
   const label=cell.label.replace(/\n/g,"");
   const comment=boards[name]?.comments?.[id]||"";
@@ -1764,7 +1959,7 @@ function viewSquare(name,id){
 
 /* ---------- 集計ビンゴのマス詳細（誰が回答したか＋みんなの写真を1画面で） ---------- */
 async function aggSquare(id){
-  const cell=CELLS.find(c=>c.id===id);
+  const cell=CELLS.find(c=>c.id===id)??{cat:"ot",label:"（不明なお題）"};
   const cat=CATS[cell.cat];
   const label=cell.label.replace(/\n/g,"");
   const who=MEMBERS.filter(n=>boards[n]?.filled?.[id]);
@@ -1816,7 +2011,7 @@ async function renderPlayerBoard(name){
       <span class="who">${nameHtml(name)}</span>
       <span class="cnt"><b>${filledCount}</b>マス ・ ライン${lines}本 ・ <b>${score}</b>点</span>
     </div>
-    <div class="card"><div class="boardscroll"><div class="bgrid" id="pgrid">
+    <div class="card"><div class="boardscroll"><div class="bgrid ${EXPANDED?"g10":""}" id="pgrid">
       ${CELLS.map(c=>cellHtml(c,{},filled,false,ng,ok,lit)).join("")}
     </div></div>${legendHtml()}</div>
     <p style="font-size:11.5px;color:var(--muted);text-align:center;margin-top:8px;">写真のあるマスをタップすると、拡大写真とコメントが見られるよ</p>
@@ -1937,7 +2132,7 @@ async function renderGMBoard(name){
       <button class="smallbtn" id="gback">← GM画面</button>
     </div>
     <div class="notice">写真のあるマスをタップすると、拡大して〇×の判定ができるよ。<button class="smallbtn" id="greload" style="margin-left:6px;">写真を再読込</button></div>
-    <div class="card"><div class="boardscroll"><div class="bgrid">
+    <div class="card"><div class="boardscroll"><div class="bgrid ${EXPANDED?"g10":""}">
       ${CELLS.map(c=>cellHtml(c,{},filled,false,ng,ok,lit)).join("")}
     </div></div>${legendHtml()}
     <div class="marklegend"><span style="color:#2F9E63;font-weight:700;">⭕＝チェックOK</span> ・ <span style="color:#C22B2B;font-weight:700;">❌＝要撮り直し</span> ・ <span style="color:#9A6B00;font-weight:700;">印なし＝チェック待ち</span></div></div>
@@ -1984,19 +2179,19 @@ function renderDemoBoard(){
   app.innerHTML=`
     <div class="statusbar">
       <span class="who">🧪 お試し</span>
-      <span class="cnt"><b>${filledCount}</b>/60マス ・ <b>${score}</b>点</span>
+      <span class="cnt"><b>${filledCount}</b>/${TOTAL_TOPICS}マス ・ <b>${score}</b>点</span>
       <button class="smallbtn" id="gback">← GM画面</button>
     </div>
     <div class="notice">ここは<b>GM専用のお試しボード</b>（ランキングには入らないよ）。マスをタップして写真アップを試してみて。アップしたら、GM画面の「写真チェック」で〇×判定の練習もできるよ。</div>
     ${ngCount?`<div class="notice err">❌ ×のマスが<b>${ngCount}コ</b>あるよ（メンバー本人にはこう見えるよ）</div>`:""}
-    <div class="card"><div class="boardscroll"><div class="bgrid">
+    <div class="card"><div class="boardscroll"><div class="bgrid ${EXPANDED?"g10":""}">
       ${CELLS.map(c=>cellHtml(c,demoPhotos,filled,true,ng,ok,lit)).join("")}
     </div></div>${legendHtml()}
     <div class="marklegend"><span style="color:#2F9E63;font-weight:700;">⭕＝GMチェックOK</span> ・ <span style="color:#C22B2B;font-weight:700;">❌＝撮り直してね</span> ・ <span style="color:#9A6B00;font-weight:700;">印なし＝チェック待ち</span></div></div>
     <div class="scorebox">
       <div class="scorehead">いまの点数</div>
       <div class="scorenum"><b>${score}</b>点</div>
-      <div class="scoredetail">マス ${filledCount}点 ＋ FREE 4点 ＋ ライン${lines}本×2点</div>
+      <div class="scoredetail">マス ${filledCount}点 ＋ FREE ${FREE_IDS.size}点 ＋ ライン${lines}本×2点</div>
       ${stageHtml(score)}
     </div>
     ${histHtml(b, DEMO_NAME)}
@@ -2015,7 +2210,7 @@ function renderDemoBoard(){
 }
 
 async function gmSquare(name,id){
-  const cell=CELLS.find(c=>c.id===id);
+  const cell=CELLS.find(c=>c.id===id)??{cat:"ot",label:"（不明なお題）"};
   const cat=CATS[cell.cat];
   const label=cell.label.replace(/\n/g,"");
   const isNg=!!boards[name]?.ng?.[id];
@@ -2146,6 +2341,13 @@ window.addEventListener("popstate",e=>{
   render();
   popNav=false;
 });
+
+/* ---------- 拡張時刻ちょうどに自動で10×10へ切り替えるタイマー ----------
+   （render()は誰かの更新のたびに走るが、誰も操作していない画面でも時刻で切り替わるように） */
+if(!isExpanded()){
+  const wait=Math.min(EXPAND_AT-new Date()+1000, 2147000000);   // setTimeout上限ガード
+  if(wait>0) setTimeout(()=>render(), wait);
+}
 
 /* ---------- 起動：データ購読の開始 ----------
    必ずモジュールの最後に置くこと。お試しモードのlistenBoardsは購読と同時に同期でrender()を
